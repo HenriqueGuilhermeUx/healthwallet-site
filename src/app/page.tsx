@@ -206,7 +206,64 @@ export default function Home() {
           </div>
         </div>
       </div>
+      {/* Prescrições e Pedidos */}
+<div className="mt-16 bg-white rounded-3xl p-8 md:p-12 border border-gray-100 shadow-sm">
+  <div className="text-center mb-10">
+    <div className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 rounded-full text-emerald-700 text-sm font-medium mb-4">
+      Receita digital e pedidos de exame
+    </div>
 
+    <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-4">
+      Prescreva, solicite exames e envie tudo para o HealthWallet do paciente.
+    </h2>
+
+    <p className="text-gray-600 max-w-2xl mx-auto">
+      O MyDataMed permite que profissionais de saúde criem receitas digitais,
+      pedidos de exames, orientações e documentos clínicos, com assinatura digital
+      e envio direto para a carteira de saúde do paciente.
+    </p>
+  </div>
+
+  <div className="grid md:grid-cols-3 gap-6">
+    <div className="rounded-2xl bg-emerald-50 p-6">
+      <h3 className="font-semibold text-gray-900 mb-2">
+        Receitas digitais
+      </h3>
+      <p className="text-sm text-gray-600">
+        Gere receitas com medicamentos, posologia, observações e assinatura digital.
+      </p>
+    </div>
+
+    <div className="rounded-2xl bg-blue-50 p-6">
+      <h3 className="font-semibold text-gray-900 mb-2">
+        Pedidos de exames
+      </h3>
+      <p className="text-sm text-gray-600">
+        Solicite exames laboratoriais, imagem, check-ups e modelos frequentes.
+      </p>
+    </div>
+
+    <div className="rounded-2xl bg-purple-50 p-6">
+      <h3 className="font-semibold text-gray-900 mb-2">
+        Assinatura digital
+      </h3>
+      <p className="text-sm text-gray-600">
+        Integração com Clicksign para assinatura digital qualificada quando aplicável.
+      </p>
+    </div>
+  </div>
+
+  <div className="mt-8 rounded-2xl bg-gray-50 p-6">
+    <h3 className="font-semibold text-gray-900 mb-2">
+      Base inteligente para o profissional
+    </h3>
+
+    <p className="text-sm text-gray-600">
+      Com integração à Prescreve.com, o profissional pode acessar medicamentos,
+      doenças, CID, exames e sugestões estruturadas para agilizar o atendimento.
+    </p>
+  </div>
+</div> 
       <div className="text-center mt-16">
         <div className="inline-flex items-center gap-2 text-gray-600 mb-4">
           <Stethoscope className="w-5 h-5" />

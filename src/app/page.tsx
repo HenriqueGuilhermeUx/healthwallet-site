@@ -206,6 +206,7 @@ export default function Home() {
           </div>
         </div>
       </div>
+      
       {/* Prescrições e Pedidos */}
 <div className="mt-16 bg-white rounded-3xl p-8 md:p-12 border border-gray-100 shadow-sm">
   <div className="text-center mb-10">
@@ -264,6 +265,7 @@ export default function Home() {
     </p>
   </div>
 </div> 
+      
       <div className="text-center mt-16">
         <div className="inline-flex items-center gap-2 text-gray-600 mb-4">
           <Stethoscope className="w-5 h-5" />

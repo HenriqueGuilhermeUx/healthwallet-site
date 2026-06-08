@@ -71,69 +71,86 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
   }, [user, professional, resolvedParams.id])
 
   const loadPatientData = async () => {
-    setLoading(true)
+  setLoading(true)
 
+  async function safeSelect(table: string, patientId: string) {
     try {
-      // Load access code
-      const { data: access } = await supabase
-        .from('access_codes')
+      const { data, error } = await supabase
+        .from(table)
         .select('*')
-        .eq('id', resolvedParams.id)
-        .single()
+        .eq('user_id', patientId)
+        .limit(20)
 
-      if (!access) {
-        toast.error('Acesso não encontrado')
-        router.push('/dashboard')
-        return
-      }
+      if (error) return []
+      return data || []
+    } catch {
+      return []
+    }
+  }
 
-      // Check if expired
-      if (new Date(access.expires_at) < new Date()) {
-        toast.error('Este acesso expirou')
-        router.push('/dashboard')
-        return
-      }
+  try {
+    const { data: access } = await supabase
+      .from('access_codes')
+      .select('*')
+      .eq('id', resolvedParams.id)
+      .single()
 
-      setAccessCode(access)
+    if (!access) {
+      toast.error('Acesso não encontrado')
+      router.push('/dashboard')
+      return
+    }
 
-      // Load patient profile from localStorage (we'll simulate getting this data)
-      // In production, this would come from an API that validates the access code
-      const profileData = {
-        birthDate: '1990-01-15',
-        gender: 'female',
-        weight: '65',
-        height: '165',
-        bloodType: 'A+',
-        smokingStatus: 'never',
-        alcoholConsumption: 'occasional',
-        physicalActivity: 'moderate',
-        sleepHours: '7',
-        stressLevel: 'moderate',
-        allergies: access.permissions?.allergies ? ['Penicilina'] : [],
-        chronicConditions: access.permissions?.medications ? ['Hipertensão'] : [],
-        medScore: 72,
-      }
+    if (new Date(access.expires_at) < new Date()) {
+      toast.error('Este acesso expirou')
+      router.push('/dashboard')
+      return
+    }
 
-      // Simulated exam data
-      const exams = access.permissions?.exams ? [
-        {
-          id: '1',
-          file_name: 'Hemograma_2024.pdf',
-          exam_type: 'hemograma',
-          exam_date: '2024-01-15',
-          laboratory: 'LabEx',
-          ai_analysis: 'Resultados dentro dos parâmetros esperados.'
-        },
-        {
-          id: '2',
-          file_name: 'Perfil_Lipidico.pdf',
-          exam_type: 'lipidico',
-          exam_date: '2024-01-15',
-          laboratory: 'LabEx',
-          ai_analysis: 'LDL ligeiramente elevado. Recomenda-se dieta.'
-        }
-      ] : []
+    setAccessCode(access)
 
+    const permissions = access.permissions || {}
+
+    const profileRows = await safeSelect('profiles', access.patient_id)
+    const profileData = profileRows[0] || {
+      birthDate: null,
+      gender: null,
+      bloodType: null,
+      medScore: 0,
+      allergies: [],
+    }
+
+    const exams = permissions.exams
+      ? await safeSelect('exams', access.patient_id)
+      : []
+
+    const medications = permissions.medications
+      ? await safeSelect('medications', access.patient_id)
+      : []
+
+    const allergies =
+      permissions.allergies && Array.isArray(profileData.allergies)
+        ? profileData.allergies
+        : []
+
+    setPatientData({
+      profile: profileData,
+      exams,
+      medications,
+      medscore: {
+        score: profileData.medScore || profileData.medscore || 0,
+        level: profileData.medScore || profileData.medscore ? 'Disponível' : 'Não calculado',
+      },
+      allergies,
+    })
+  } catch (err) {
+    console.error('Error loading patient data:', err)
+    toast.error('Erro ao carregar dados do paciente')
+  } finally {
+    setLoading(false)
+  }
+}
+  
       // Simulated medications
       const medications = access.permissions?.medications ? [
         { id: '1', name: 'Losartana', dosage: '50mg', frequency: '1x ao dia' }

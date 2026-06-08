@@ -1,0 +1,56 @@
+name: ETL - Atualizar catálogo (Anvisa)
+
+on:
+  # Roda todo dia 1 do mês às 03:00 UTC (~00:00 horário de Brasília)
+  schedule:
+    - cron: '0 3 1 * *'
+
+  # Permite rodar manualmente pela aba Actions
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry-run (não escreve no banco, só simula)'
+        type: boolean
+        default: false
+      csv_url:
+        description: 'URL do CSV (deixe vazio para usar o valor padrão em secrets/vars)'
+        type: string
+        required: false
+        default: ''
+
+jobs:
+  etl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci --no-audit --no-fund
+
+      - name: Rodar ETL
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ANVISA_CSV_URL: ${{ github.event.inputs.csv_url || vars.ANVISA_CSV_URL || secrets.ANVISA_CSV_URL }}
+          ETL_BATCH_SIZE: ${{ vars.ETL_BATCH_SIZE || '500' }}
+          ETL_ENCODING: ${{ vars.ETL_ENCODING || 'utf-8' }}
+          ETL_DRY_RUN: ${{ github.event.inputs.dry_run && 'true' || 'false' }}
+        run: node scripts/etl-anvisa.mjs
+
+      - name: Resumo
+        if: always()
+        run: |
+          echo "## ETL Anvisa" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- Execução: $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "- Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Dry-run: ${{ github.event.inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY

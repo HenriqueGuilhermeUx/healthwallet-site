@@ -39,13 +39,22 @@ export function Header() {
         {user && professional && (
           <div className="flex items-center gap-3">
             {professional.professional_type === 'medico' && (
-              <Link
-                href="/prescriptions"
-                className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
-              >
-                <FileText className="w-4 h-4" />
-                <span className="hidden sm:inline">Receitas</span>
-              </Link>
+              <>
+                <Link
+                  href="/prescriptions"
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                >
+                  <FileText className="w-4 h-4" />
+                  <span className="hidden sm:inline">Receitas</span>
+                </Link>
+                <Link
+                  href="/exam-requests"
+                  className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 hover:text-sky-700 hover:bg-sky-50 rounded-lg transition-colors"
+                >
+                  <FileSearch className="w-4 h-4" />
+                  <span className="hidden sm:inline">Pedidos</span>
+                </Link>
+              </>
             )}
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <User className="w-4 h-4" />

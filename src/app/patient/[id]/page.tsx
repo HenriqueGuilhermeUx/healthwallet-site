@@ -369,7 +369,7 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
       </div>
 
       {/* Action Buttons */}
-      <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
+      <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         {professional?.professional_type === 'medico' && (
           <>
             <Link
@@ -384,7 +384,14 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
               className="py-4 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
             >
               <FileText className="w-5 h-5" />
-              Criar Receita Digital
+              Criar Receita
+            </Link>
+            <Link
+              href={`/exam-requests/new?patientId=${accessCode?.patient_id}`}
+              className="py-4 rounded-xl bg-cyan-600 text-white font-semibold hover:bg-cyan-700 transition-colors flex items-center justify-center gap-2"
+            >
+              <FileSearch className="w-5 h-5" />
+              Pedir Exame
             </Link>
           </>
         )}

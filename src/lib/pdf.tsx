@@ -337,3 +337,156 @@ export async function renderReceitaPdf(receita: ReceitaForPdf): Promise<Buffer> 
 export function bufferToDataUriBase64(buf: Buffer): string {
   return `data:application/pdf;base64,${buf.toString('base64')}`;
 }
+
+// =====================================================================
+// PEDIDO DE EXAME
+// =====================================================================
+
+type PedidoExameItemForPdf = {
+  id: number;
+  exame_id: number;
+  observacoes: string | null;
+  exame: { codigo_tuss: string; descricao: string; categoria: string | null } | null;
+};
+
+type PedidoExameForPdf = {
+  id: number;
+  cid_principal?: { codigo: string; descricao: string } | null;
+  cid_secundario?: { codigo: string; descricao: string } | null;
+  texto_clinico: string | null;
+  data_emissao: string;
+  status: string;
+};
+
+function PedidoExameDocument({
+  pedido, itens, paciente, medico,
+}: {
+  pedido: PedidoExameForPdf;
+  itens: PedidoExameItemForPdf[];
+  paciente: { full_name: string; birth_date: string | null; gender: string | null; blood_type: string | null };
+  medico: { full_name: string; professional_register: string; register_state: string; professional_type: string; specialty: string | null };
+}) {
+  return (
+    <Page size="A4" style={styles.page}>
+      {/* Header */}
+      <View style={styles.header}>
+        <Text style={styles.headerName}>{medico.full_name}</Text>
+        <Text style={styles.headerSub}>
+          {medico.professional_type.toUpperCase()} • {medico.professional_register}/{medico.register_state}
+          {medico.specialty ? ` • ${medico.specialty}` : ''}
+        </Text>
+      </View>
+
+      {/* Title */}
+      <Text style={[styles.title, { color: '#0284c7', borderBottomColor: '#0284c7' }]}>
+        PEDIDO DE EXAMES
+      </Text>
+
+      {/* Paciente */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Paciente</Text>
+        <View style={styles.row}>
+          <Text style={styles.label}>Nome:</Text>
+          <Text style={styles.value}>{paciente.full_name}</Text>
+        </View>
+        {paciente.birth_date && (
+          <View style={styles.row}>
+            <Text style={styles.label}>Nascimento:</Text>
+            <Text style={styles.value}>{formatDate(paciente.birth_date)}</Text>
+          </View>
+        )}
+        {paciente.gender && (
+          <View style={styles.row}>
+            <Text style={styles.label}>Sexo:</Text>
+            <Text style={styles.value}>{paciente.gender}</Text>
+          </View>
+        )}
+        {paciente.blood_type && (
+          <View style={styles.row}>
+            <Text style={styles.label}>Tipo sanguíneo:</Text>
+            <Text style={styles.value}>{paciente.blood_type}</Text>
+          </View>
+        )}
+      </View>
+
+      {/* Indicação clínica */}
+      {(pedido.cid_principal || pedido.texto_clinico) && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Indicação Clínica</Text>
+          {pedido.cid_principal && (
+            <Text style={styles.value}>
+              <Text style={{ fontWeight: 700 }}>CID: </Text>
+              {pedido.cid_principal.codigo} — {pedido.cid_principal.descricao}
+            </Text>
+          )}
+          {pedido.texto_clinico && (
+            <Text style={[styles.value, { marginTop: 4 }]}>{pedido.texto_clinico}</Text>
+          )}
+        </View>
+      )}
+
+      {/* Exames */}
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>Exames Solicitados</Text>
+        {itens.length === 0 ? (
+          <Text style={styles.value}>Nenhum exame solicitado.</Text>
+        ) : (
+          itens.map((it, i) => (
+            <View key={it.id} style={{ marginBottom: 8, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: COLORS.border }}>
+              <View style={{ flexDirection: 'row' }}>
+                <Text style={[styles.value, { fontWeight: 700, width: 24 }]}>{i + 1}.</Text>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.value, { fontWeight: 700 }]}>
+                    {it.exame?.descricao || 'Exame'}
+                  </Text>
+                  <Text style={styles.headerSub}>
+                    TUSS {it.exame?.codigo_tuss}
+                    {it.exame?.categoria ? ` • ${it.exame.categoria}` : ''}
+                  </Text>
+                  {it.observacoes && (
+                    <Text style={[styles.value, { fontSize: 9, marginTop: 3, color: COLORS.muted }]}>
+                      Obs: {it.observacoes}
+                    </Text>
+                  )}
+                </View>
+              </View>
+            </View>
+          ))
+        )}
+      </View>
+
+      {/* Assinatura */}
+      <View style={styles.signatureArea}>
+        <View style={styles.signatureLine}>
+          <Text>{medico.full_name}</Text>
+          <Text>CRM/{medico.register_state} {medico.professional_register}</Text>
+          {pedido.status === 'rascunho' ? (
+            <Text>Rascunho — sem assinatura digital</Text>
+          ) : (
+            <Text>Assinado digitalmente</Text>
+          )}
+        </View>
+      </View>
+
+      <Text style={styles.footer} fixed>
+        Documento gerado eletronicamente em {formatDate(new Date().toISOString())} • HealthWallet Pro
+      </Text>
+    </Page>
+  );
+}
+
+export async function renderPedidoExamePdf(args: {
+  pedido: PedidoExameForPdf;
+  itens: PedidoExameItemForPdf[];
+  paciente: { full_name: string; birth_date: string | null; gender: string | null; blood_type: string | null };
+  medico: { full_name: string; professional_register: string; register_state: string; professional_type: string; specialty: string | null };
+}): Promise<Buffer> {
+  return renderToBuffer(
+    <PedidoExameDocument
+      pedido={args.pedido}
+      itens={args.itens}
+      paciente={args.paciente}
+      medico={args.medico}
+    />,
+  );
+}

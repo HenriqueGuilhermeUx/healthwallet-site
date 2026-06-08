@@ -17,11 +17,9 @@ import { api, type Consultation, type PatientCondition, type MedicationUse } fro
 
 type PatientInfo = {
   id: string;
-  full_name: string;
   birth_date: string | null;
   gender: string | null;
   blood_type: string | null;
-  email: string | null;
   phone: string | null;
 };
 
@@ -125,7 +123,7 @@ export default function ProntuarioPage({ params }: { params: Promise<{ id: strin
 
         const { data: profile, error: profErr } = await supabase
           .from('profiles')
-          .select('id, full_name, birth_date, gender, blood_type, email, phone')
+          .select('id, birth_date, gender, blood_type, phone')
           .eq('id', access.patient_id)
           .single();
         if (profErr) throw new Error('Não foi possível carregar o perfil do paciente');
@@ -172,7 +170,7 @@ export default function ProntuarioPage({ params }: { params: Promise<{ id: strin
           </button>
           <div className="flex-1">
             <h1 className="font-semibold text-slate-900">
-              Prontuário · {patient?.full_name || 'Paciente'}
+              Prontuário · Paciente
             </h1>
             <p className="text-xs text-slate-500">
               {calcAge(patient?.birth_date)} · {patient?.gender || '—'} · {patient?.blood_type ? `Tipo sanguíneo: ${patient.blood_type}` : ''}

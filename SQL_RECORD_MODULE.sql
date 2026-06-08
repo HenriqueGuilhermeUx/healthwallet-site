@@ -139,13 +139,17 @@ CREATE POLICY "mu_professional_select" ON public.medication_uses
 -- 5) VIEW AUXILIAR — prontuário agregado (sidebar)
 -- =====================================================================
 
+DROP VIEW IF EXISTS public.vw_patient_clinical_context;
 CREATE OR REPLACE VIEW public.vw_patient_clinical_context AS
 SELECT
     p.id AS paciente_id,
-    p.full_name,
+    -- Não referencia colunas que não existem no profiles (full_name, email).
+    -- Mantém só o que existe: id, birth_date, gender, blood_type, allergies,
+    -- phone, created_at, updated_at. Nome/email vêm do auth.users via API.
     p.birth_date,
     p.gender,
     p.blood_type,
+    p.phone,
     -- contadores úteis para a sidebar
     (SELECT COUNT(*) FROM public.alergias_paciente a
         WHERE a.paciente_id = p.id AND a.tipo = 'medicamento') AS n_alergias,

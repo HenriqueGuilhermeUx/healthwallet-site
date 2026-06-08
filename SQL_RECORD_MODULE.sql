@@ -196,6 +196,74 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 
 -- =====================================================================
+-- 6b) ALERTAS CLÍNICOS PARA RECEITA EM RASCUNHO
+--     Mesma lógica do check_clinical_alerts, mas recebe a lista de
+--     medicamento_ids em vez de receita_id — para alertar o médico
+--     ENQUANTO ele está montando a prescrição.
+--     Retorna também o medicamento_id para o frontend poder destacar
+--     qual item gerou o alerta.
+-- =====================================================================
+
+CREATE OR REPLACE FUNCTION public.check_clinical_alerts_for_items(
+    p_paciente_id UUID,
+    p_medicamento_ids INT[]
+) RETURNS TABLE(
+    tipo VARCHAR(20),
+    nivel VARCHAR(20),
+    mensagem TEXT,
+    medicamento_id INT
+) AS $$
+BEGIN
+    IF p_medicamento_ids IS NULL OR array_length(p_medicamento_ids, 1) IS NULL THEN
+        RETURN;
+    END IF;
+
+    RETURN QUERY
+    -- ALERGIA: principio ativo do medicamento está nas alergias do paciente
+    SELECT 'alergia'::VARCHAR(20),
+           a.gravidade::VARCHAR(20),
+           format('Alergia a %s (gravidade: %s)', pa.nome, COALESCE(a.gravidade, 'nao especificada')),
+           m.id
+    FROM public.medicamentos m
+    JOIN public.alergias_paciente a ON a.principio_ativo_id = m.principio_ativo_id
+    JOIN public.principios_ativos pa ON pa.id = a.principio_ativo_id
+    WHERE a.paciente_id = p_paciente_id
+      AND a.tipo = 'medicamento'
+      AND m.id = ANY(p_medicamento_ids)
+
+    UNION ALL
+
+    -- MEDICAMENTO JA EM USO: o paciente ja usa esse remedio (possivel duplicata)
+    SELECT 'medicamento_ativo'::VARCHAR(20),
+           'info'::VARCHAR(20),
+           format('Paciente ja usa %s (desde %s). Confirme se e continuacao ou duplicata.',
+                  COALESCE(mu.medicamento_label, med.nome_comercial),
+                  COALESCE(mu.data_inicio::text, 'data desconhecida')),
+           med.id
+    FROM public.medication_uses mu
+    JOIN public.medicamentos med ON med.id = mu.medicamento_id
+    WHERE mu.paciente_id = p_paciente_id
+      AND mu.ativo
+      AND med.id = ANY(p_medicamento_ids)
+
+    UNION ALL
+
+    -- INTERACAO: principio ativo duplicado dentro da propria receita
+    -- (ex: receitar Novalgina + Dipirona, que sao o mesmo principio ativo)
+    SELECT 'principio_ativo_duplicado'::VARCHAR(20),
+           'warning'::VARCHAR(20),
+           format('Principio ativo %s aparece em mais de um item desta receita', pa.nome),
+           m2.id
+    FROM public.medicamentos m1
+    JOIN public.medicamentos m2 ON m2.principio_ativo_id = m1.principio_ativo_id
+                                 AND m2.id > m1.id
+    JOIN public.principios_ativos pa ON pa.id = m1.principio_ativo_id
+    WHERE m1.id = ANY(p_medicamento_ids)
+      AND m2.id = ANY(p_medicamento_ids);
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+-- =====================================================================
 -- 7) REALTIME (para prontuário notificar médicos)
 -- =====================================================================
 

@@ -4,7 +4,7 @@ import { useEffect, useState, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
-import { api, type ReceitaItem, type Medicamento, type Cid } from '@/lib/api'
+import { api, type ReceitaItem, type Medicamento, type Cid, type ClinicalAlert } from '@/lib/api'
 import { MedicationAutocomplete } from '@/components/MedicationAutocomplete'
 import { ArrowLeft, Plus, Trash2, Save, Send, Loader2, Search } from 'lucide-react'
 import Link from 'next/link'
@@ -16,6 +16,78 @@ const TIPOS_RECEITA = [
   { value: 'azul_b1b2',                label: 'Receita B — Psicotrópicos (azul — 2 vias)' },
   { value: 'amarela_a1a2',             label: 'Receita A — Entorpecentes (amarela — 2 vias)' },
 ]
+
+function ClinicalAlertsBanner({ alerts, loading }: { alerts: ClinicalAlert[]; loading: boolean }) {
+  if (loading && alerts.length === 0) {
+    return (
+      <div className="mb-3 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-xs text-slate-500">
+        Verificando alergias e interações…
+      </div>
+    )
+  }
+  if (alerts.length === 0) {
+    return null
+  }
+
+  const alergia    = alerts.filter((a) => a.tipo === 'alergia')
+  const duplicado  = alerts.filter((a) => a.tipo === 'principio_ativo_duplicado')
+  const emUso      = alerts.filter((a) => a.tipo === 'medicamento_ativo')
+
+  return (
+    <div className="mb-4 space-y-2">
+      {alergia.length > 0 && (
+        <div className="rounded-lg border-2 border-rose-300 bg-rose-50 p-3">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-rose-700 text-lg">⚠️</span>
+            <strong className="text-sm text-rose-900">
+              Alergia identificada ({alergia.length})
+            </strong>
+          </div>
+          <ul className="text-xs text-rose-800 space-y-1 ml-6 list-disc">
+            {alergia.map((a, i) => (
+              <li key={i}>{a.mensagem}</li>
+            ))}
+          </ul>
+          <p className="text-[10px] text-rose-700 mt-2 ml-6 italic">
+            Revise a prescrição — o princípio ativo coincide com alergia registrada.
+          </p>
+        </div>
+      )}
+
+      {duplicado.length > 0 && (
+        <div className="rounded-lg border-2 border-amber-300 bg-amber-50 p-3">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-amber-700 text-lg">🔁</span>
+            <strong className="text-sm text-amber-900">
+              Princípio ativo duplicado ({duplicado.length})
+            </strong>
+          </div>
+          <ul className="text-xs text-amber-800 space-y-1 ml-6 list-disc">
+            {duplicado.map((a, i) => (
+              <li key={i}>{a.mensagem}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {emUso.length > 0 && (
+        <div className="rounded-lg border-2 border-sky-300 bg-sky-50 p-3">
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-sky-700 text-lg">ℹ️</span>
+            <strong className="text-sm text-sky-900">
+              Já em uso ({emUso.length})
+            </strong>
+          </div>
+          <ul className="text-xs text-sky-800 space-y-1 ml-6 list-disc">
+            {emUso.map((a, i) => (
+              <li key={i}>{a.mensagem}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  )
+}
 
 function PrescNewInner() {
   const { professional, loading: authLoading } = useAuth()
@@ -47,6 +119,28 @@ function PrescNewInner() {
 
   // Submit
   const [submitting, setSubmitting] = useState(false)
+
+  // Alertas clínicos em tempo real
+  const [alerts, setAlerts] = useState<ClinicalAlert[]>([])
+  const [alertsLoading, setAlertsLoading] = useState(false)
+
+  useEffect(() => {
+    if (!pacienteId) { setAlerts([]); return }
+    const medIds = itens
+      .map((it) => it.medicamento_id)
+      .filter((x): x is number => typeof x === 'number' && x > 0)
+    if (medIds.length === 0) { setAlerts([]); return }
+
+    setAlertsLoading(true)
+    const handle = setTimeout(() => {
+      api.checkClinicalAlerts(pacienteId, medIds)
+        .then((res) => setAlerts(res || []))
+        .catch((err) => console.warn('alerts check falhou:', err))
+        .finally(() => setAlertsLoading(false))
+    }, 400) // debounce 400ms
+
+    return () => clearTimeout(handle)
+  }, [pacienteId, itens])
 
   useEffect(() => {
     if (!authLoading && !professional) router.push('/login')
@@ -252,6 +346,8 @@ function PrescNewInner() {
 
           {/* Itens / medicamentos */}
           <div className="bg-white rounded-2xl border border-gray-200 p-6">
+            <ClinicalAlertsBanner alerts={alerts} loading={alertsLoading} />
+
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-semibold text-gray-900">Medicamentos</h2>
               <button

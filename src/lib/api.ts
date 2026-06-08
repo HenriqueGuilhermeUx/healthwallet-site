@@ -268,3 +268,76 @@ Object.assign(api, {
       body: JSON.stringify({ paciente_id: pacienteId, medicamento_ids: medicamentoIds }),
     }),
 });
+
+// ===== Pedidos de Exame =====
+
+export type ExameTUSS = {
+  id: number;
+  codigo_tuss: string;
+  descricao: string;
+  categoria: string | null;
+  ativo: boolean;
+};
+
+export type PedidoExameItem = {
+  id?: number;
+  exame_id: number;
+  observacoes?: string | null;
+  ordem: number;
+  exame?: { id: number; codigo_tuss: string; descricao: string; categoria: string | null } | null;
+};
+
+export type PedidoExame = {
+  id: number;
+  medico_id: string;
+  paciente_id: string;
+  cid_principal_id: number | null;
+  cid_principal?: { id: number; codigo: string; descricao: string } | null;
+  cid_secundario_id: number | null;
+  texto_clinico: string | null;
+  data_emissao: string;
+  status: string;
+  clicksign_document_key: string | null;
+  clicksign_signer_key: string | null;
+  clicksign_sign_url: string | null;
+  pdf_assinado_url: string | null;
+  pdf_final_path: string | null;
+  assinado_em: string | null;
+  enviado_paciente_em: string | null;
+  created_at: string;
+  updated_at: string;
+  pedido_exame_itens?: PedidoExameItem[];
+};
+
+Object.assign(api, {
+  searchExames: (q: string, limit = 20): Promise<ExameTUSS[]> => {
+    const qs = new URLSearchParams({ q, limit: String(limit) });
+    return http<ExameTUSS[]>(`/api/exams/search?${qs}`);
+  },
+  listExamRequests: (pacienteId?: string): Promise<PedidoExame[]> => {
+    const qs = pacienteId ? `?paciente_id=${encodeURIComponent(pacienteId)}` : '';
+    return http<PedidoExame[]>(`/api/exam-requests${qs}`);
+  },
+  getExamRequest: (id: number): Promise<PedidoExame> =>
+    http<PedidoExame>(`/api/exam-requests/${id}`),
+  createExamRequest: (data: {
+    paciente_id: string;
+    cid_principal_id?: number | null;
+    cid_secundario_id?: number | null;
+    texto_clinico?: string;
+    itens: Array<{ exame_id: number; observacoes?: string }>;
+  }): Promise<PedidoExame> =>
+    http<PedidoExame>('/api/exam-requests', { method: 'POST', body: JSON.stringify(data) }),
+  updateExamRequest: (id: number, data: Partial<{
+    texto_clinico: string;
+    cid_principal_id: number | null;
+    cid_secundario_id: number | null;
+    status: string;
+    itens: Array<{ exame_id: number; observacoes?: string }>;
+  }>): Promise<PedidoExame> =>
+    http<PedidoExame>(`/api/exam-requests/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteExamRequest: (id: number): Promise<{ ok: true }> =>
+    http<{ ok: true }>(`/api/exam-requests/${id}`, { method: 'DELETE' }),
+  examRequestPdfUrl: (id: number): string =>
+    `/api/exam-requests/${id}/pdf`,
+});

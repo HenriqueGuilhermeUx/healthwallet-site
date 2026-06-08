@@ -4,7 +4,7 @@ import { ReactNode } from 'react'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { Toaster } from 'sonner'
 import Link from 'next/link'
-import { Heart, LogOut, User } from 'lucide-react'
+import { Heart, LogOut, User, FileText } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 
@@ -37,10 +37,19 @@ export function Header() {
         </Link>
 
         {user && professional && (
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            {professional.professional_type === 'medico' && (
+              <Link
+                href="/prescriptions"
+                className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+              >
+                <FileText className="w-4 h-4" />
+                <span className="hidden sm:inline">Receitas</span>
+              </Link>
+            )}
             <div className="flex items-center gap-2 text-sm text-gray-600">
               <User className="w-4 h-4" />
-              <span className="hidden sm:inline">{professional.full_name}</span>
+              <span className="hidden md:inline">{professional.full_name}</span>
               <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs">
                 {professional.professional_type}
               </span>

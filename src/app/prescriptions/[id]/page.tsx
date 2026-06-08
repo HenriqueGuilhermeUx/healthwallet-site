@@ -6,7 +6,7 @@ import { useRouter, useParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { api, type Receita } from '@/lib/api'
 import { ClicksignWidget } from '@/components/ClicksignWidget'
-import { ArrowLeft, Send, Loader2, FileText, CheckCircle2, ExternalLink, Download, Trash2, AlertCircle } from 'lucide-react'
+import { ArrowLeft, Send, Loader2, FileText, CheckCircle2, ExternalLink, Download, Trash2, AlertCircle, LogIn } from 'lucide-react'
 import { toast } from 'sonner'
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
@@ -18,7 +18,7 @@ const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
 }
 
 export default function PrescriptionDetailPage() {
-  const { professional, loading: authLoading } = useAuth()
+  const { user, professional, loading: authLoading, signOut } = useAuth()
   const router = useRouter()
   const params = useParams()
   const id = Number(params?.id)
@@ -26,19 +26,28 @@ export default function PrescriptionDetailPage() {
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
   const [polling, setPolling] = useState(false)
+  const [loadError, setLoadError] = useState<string | null>(null)
 
+  // Guard 1: não autenticado
   useEffect(() => {
-    if (!authLoading && !professional) router.push('/login')
-  }, [professional, authLoading, router])
+    if (!authLoading && !user) router.push('/login')
+  }, [user, authLoading, router])
 
   const load = useCallback(async () => {
-    if (!Number.isFinite(id)) return
+    if (!Number.isFinite(id)) {
+      setLoadError('ID de receita inválido na URL')
+      setLoading(false)
+      return
+    }
     setLoading(true)
+    setLoadError(null)
     try {
       const data = await api.getPrescription(id)
       setReceita(data as Receita)
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao carregar')
+      const msg = e instanceof Error ? e.message : 'Erro ao carregar'
+      setLoadError(msg)
+      toast.error(msg)
     } finally {
       setLoading(false)
     }
@@ -46,7 +55,7 @@ export default function PrescriptionDetailPage() {
 
   useEffect(() => { load() }, [load])
 
-  // Polling pra detectar quando a assinatura finaliza (Clicksign demora 30s-2min)
+  // Polling pra detectar quando a assinatura finaliza
   useEffect(() => {
     if (!receita || receita.status !== 'aguardando_assinatura' || !polling) return
     const t = setInterval(async () => {
@@ -94,17 +103,46 @@ export default function PrescriptionDetailPage() {
     }
   }
 
-  if (authLoading || !professional) {
+  if (authLoading) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
+        <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+        <p className="text-sm text-gray-500">Verificando sessão…</p>
+      </div>
+    )
+  }
+  if (!user) return null  // vai redirecionar
+
+  if (user && !professional) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 px-4 max-w-md mx-auto text-center">
+        <AlertCircle className="w-12 h-12 text-amber-500" />
+        <h2 className="text-lg font-semibold text-gray-900">Perfil profissional não encontrado</h2>
+        <p className="text-sm text-gray-600">Faça logout e login para tentar resolver.</p>
+        <button
+          onClick={async () => { await signOut(); router.push('/login') }}
+          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700"
+        >
+          <LogIn className="w-4 h-4" />
+          Fazer logout e login
+        </button>
+      </div>
+    )
+  }
+
+  if (loading) {
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
       </div>
     )
   }
-  if (loading) {
+  if (loadError && !receita) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
-        <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+      <div className="max-w-2xl mx-auto px-4 py-8 text-center">
+        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-3" />
+        <p className="text-gray-900 font-medium mb-2">{loadError}</p>
+        <Link href="/prescriptions" className="text-emerald-600 hover:underline">Voltar à lista</Link>
       </div>
     )
   }
@@ -147,7 +185,6 @@ export default function PrescriptionDetailPage() {
         )}
       </div>
 
-      {/* Ações por status */}
       {receita.status === 'rascunho' && (
         <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 flex items-center justify-between gap-4">
           <div>
@@ -212,7 +249,6 @@ export default function PrescriptionDetailPage() {
         </div>
       )}
 
-      {/* Resumo da receita */}
       <div className="bg-white rounded-2xl border border-gray-200 p-6 space-y-4">
         <h2 className="font-semibold text-gray-900">Resumo</h2>
         <div className="grid sm:grid-cols-2 gap-4 text-sm">

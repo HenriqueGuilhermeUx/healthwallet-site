@@ -2,6 +2,7 @@
 
 import { useState, useEffect, use } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
@@ -367,14 +368,25 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
         )}
       </div>
 
-      {/* Send Document Button */}
-      <button
-        onClick={() => setShowSendDoc(true)}
-        className="w-full mt-6 py-4 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
-      >
-        <Send className="w-5 h-5" />
-        Enviar Documento/Orientação
-      </button>
+      {/* Action Buttons */}
+      <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {professional?.professional_type === 'medico' && (
+          <Link
+            href={`/prescriptions/new?patientId=${accessCode?.patient_id}`}
+            className="py-4 rounded-xl bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition-colors flex items-center justify-center gap-2"
+          >
+            <FileText className="w-5 h-5" />
+            Criar Receita Digital
+          </Link>
+        )}
+        <button
+          onClick={() => setShowSendDoc(true)}
+          className="py-4 rounded-xl bg-white border-2 border-emerald-600 text-emerald-700 font-semibold hover:bg-emerald-50 transition-colors flex items-center justify-center gap-2"
+        >
+          <Send className="w-5 h-5" />
+          Enviar Documento/Orientação
+        </button>
+      </div>
 
       {/* Send Document Modal */}
       {showSendDoc && (

@@ -253,3 +253,18 @@ Object.assign(api, {
   deleteMedicationUse: (id: number): Promise<{ ok: true }> =>
     http<{ ok: true }>(`/api/medication-uses?id=${id}`, { method: 'DELETE' }),
 });
+
+export type ClinicalAlert = {
+  tipo: 'alergia' | 'medicamento_ativo' | 'principio_ativo_duplicado' | string;
+  nivel: string;
+  mensagem: string;
+  medicamento_id: number;
+};
+
+Object.assign(api, {
+  checkClinicalAlerts: (pacienteId: string, medicamentoIds: number[]): Promise<ClinicalAlert[]> =>
+    http<ClinicalAlert[]>('/api/clinical-alerts/check', {
+      method: 'POST',
+      body: JSON.stringify({ paciente_id: pacienteId, medicamento_ids: medicamentoIds }),
+    }),
+});

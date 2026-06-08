@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
+import { supabase } from '@/lib/supabase'
 import { api, type Receita } from '@/lib/api'
-import { FileText, Plus, Loader2, Calendar, User, ChevronRight } from 'lucide-react'
+import { FileText, Plus, Loader2, Calendar, User, ChevronRight, AlertCircle, LogIn, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
@@ -24,16 +25,28 @@ const TIPO_LABEL: Record<string, string> = {
 }
 
 export default function PrescriptionsListPage() {
-  const { user, professional, loading: authLoading } = useAuth()
+  const { user, professional, loading: authLoading, signOut } = useAuth()
   const router = useRouter()
   const [items, setItems] = useState<Receita[]>([])
   const [loading, setLoading] = useState(true)
   const [filter, setFilter] = useState<string>('')
+  const [loadError, setLoadError] = useState<string | null>(null)
 
+  // Guard 1: não autenticado → login
   useEffect(() => {
-    if (!authLoading && !user) router.push('/login')
+    if (!authLoading && !user) {
+      router.push('/login')
+    }
   }, [user, authLoading, router])
 
+  // Guard 2: autenticado mas sem perfil profissional após carregar → mensagem clara
+  useEffect(() => {
+    if (!authLoading && user && !professional) {
+      setLoadError('Seu usuário está logado, mas o perfil profissional não foi encontrado. Isso pode acontecer se o cadastro foi feito há muito tempo ou em outro ambiente. Tente fazer logout e login novamente.')
+    }
+  }, [user, professional, authLoading])
+
+  // Carregar receitas quando o profissional estiver disponível
   useEffect(() => {
     if (!professional) return
     load()
@@ -41,20 +54,55 @@ export default function PrescriptionsListPage() {
 
   async function load() {
     setLoading(true)
+    setLoadError(null)
     try {
       const data = await api.listPrescriptions(filter || undefined)
       setItems(data as Receita[])
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : 'Erro ao carregar')
+      const msg = e instanceof Error ? e.message : 'Erro ao carregar'
+      setLoadError(msg)
+      toast.error(msg)
     } finally {
       setLoading(false)
     }
   }
 
-  if (authLoading || !professional) {
+  // Tela de carregamento inicial (sessão sendo verificada)
+  if (authLoading) {
     return (
-      <div className="min-h-[60vh] flex items-center justify-center">
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
         <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+        <p className="text-sm text-gray-500">Verificando sessão…</p>
+      </div>
+    )
+  }
+
+  // Tela de erro: usuário sem perfil profissional
+  if (user && !professional && loadError) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 px-4 max-w-md mx-auto text-center">
+        <AlertCircle className="w-12 h-12 text-amber-500" />
+        <h2 className="text-lg font-semibold text-gray-900">Perfil profissional não encontrado</h2>
+        <p className="text-sm text-gray-600">{loadError}</p>
+        <div className="flex gap-2">
+          <button
+            onClick={async () => { await signOut(); router.push('/login') }}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700"
+          >
+            <LogIn className="w-4 h-4" />
+            Fazer logout e login
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // Tela de carregamento (perfil sendo carregado)
+  if (!professional) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
+        <Loader2 className="w-6 h-6 animate-spin text-emerald-600" />
+        <p className="text-sm text-gray-500">Carregando perfil…</p>
       </div>
     )
   }
@@ -74,6 +122,20 @@ export default function PrescriptionsListPage() {
           Nova receita
         </Link>
       </div>
+
+      {/* Erro de carregamento inline (não bloqueante) */}
+      {loadError && !loading && (
+        <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-amber-900">Erro ao carregar receitas</p>
+            <p className="text-sm text-amber-800 mt-1">{loadError}</p>
+          </div>
+          <button onClick={load} className="text-sm text-amber-900 hover:text-amber-700 font-medium flex items-center gap-1">
+            <RefreshCw className="w-4 h-4" /> Tentar de novo
+          </button>
+        </div>
+      )}
 
       <div className="flex gap-2 mb-4 overflow-x-auto">
         {[

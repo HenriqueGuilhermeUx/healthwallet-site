@@ -139,3 +139,117 @@ export const api = {
   }> =>
     http('/api/crm/validate', { method: 'POST', body: JSON.stringify({}) }),
 };
+
+// ===== Prontuário Eletrônico =====
+
+export type Consultation = {
+  id: number;
+  medico_id: string;
+  paciente_id: string;
+  data_consulta: string;
+  anamnese: Record<string, string>;
+  exame_fisico: string | null;
+  hipotese_diagnostica: string | null;
+  cid_principal_id: number | null;
+  cid_principal?: { id: number; codigo: string; descricao: string } | null;
+  cid_secundario_id: number | null;
+  conduta: string | null;
+  notas: string | null;
+  status: 'em_andamento' | 'realizada';
+  created_at: string;
+  updated_at: string;
+};
+
+export type PatientCondition = {
+  id: number;
+  paciente_id: string;
+  cid_id: number | null;
+  descricao_livre: string | null;
+  data_inicio: string | null;
+  notas: string | null;
+  ativa: boolean;
+  created_at: string;
+  cid?: { id: number; codigo: string; descricao: string } | null;
+};
+
+export type MedicationUse = {
+  id: number;
+  paciente_id: string;
+  medicamento_id: number | null;
+  medicamento_label: string | null;
+  dose: string | null;
+  frequencia: string | null;
+  via: string | null;
+  posologia_completa: string | null;
+  data_inicio: string | null;
+  data_fim: string | null;
+  ativo: boolean;
+  created_at: string;
+  medicamento?: { id: number; nome_comercial: string; concentracao: string | null; tarja: string | null } | null;
+};
+
+// Re-atribui adicionando os métodos de prontuário ao objeto `api`.
+// (Feito por patching para preservar o objeto original `export const api = { ... }`.)
+Object.assign(api, {
+  listConsultations: (pacienteId?: string): Promise<Consultation[]> => {
+    const qs = pacienteId ? `?paciente_id=${encodeURIComponent(pacienteId)}` : '';
+    return http<Consultation[]>(`/api/consultations${qs}`);
+  },
+  getConsultation: (id: number): Promise<Consultation> =>
+    http<Consultation>(`/api/consultations/${id}`),
+  createConsultation: (data: {
+    paciente_id: string;
+    data_consulta?: string;
+    anamnese?: Record<string, string>;
+    exame_fisico?: string;
+    hipotese_diagnostica?: string;
+    cid_principal_id?: number | null;
+    cid_secundario_id?: number | null;
+    conduta?: string;
+    notas?: string;
+    status?: 'em_andamento' | 'realizada';
+  }): Promise<Consultation> =>
+    http<Consultation>('/api/consultations', { method: 'POST', body: JSON.stringify(data) }),
+  updateConsultation: (id: number, data: Partial<{
+    anamnese: Record<string, string>;
+    exame_fisico: string;
+    hipotese_diagnostica: string;
+    cid_principal_id: number | null;
+    cid_secundario_id: number | null;
+    conduta: string;
+    notas: string;
+    status: 'em_andamento' | 'realizada';
+  }>): Promise<Consultation> =>
+    http<Consultation>(`/api/consultations/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteConsultation: (id: number): Promise<{ ok: true }> =>
+    http<{ ok: true }>(`/api/consultations/${id}`, { method: 'DELETE' }),
+
+  listPatientConditions: (pacienteId: string): Promise<PatientCondition[]> =>
+    http<PatientCondition[]>(`/api/patient-conditions?paciente_id=${encodeURIComponent(pacienteId)}`),
+  createPatientCondition: (data: {
+    paciente_id: string;
+    cid_id?: number | null;
+    descricao_livre?: string;
+    data_inicio?: string;
+    notas?: string;
+  }): Promise<PatientCondition> =>
+    http<PatientCondition>('/api/patient-conditions', { method: 'POST', body: JSON.stringify(data) }),
+  deletePatientCondition: (id: number): Promise<{ ok: true }> =>
+    http<{ ok: true }>(`/api/patient-conditions?id=${id}`, { method: 'DELETE' }),
+
+  listMedicationUses: (pacienteId: string): Promise<MedicationUse[]> =>
+    http<MedicationUse[]>(`/api/medication-uses?paciente_id=${encodeURIComponent(pacienteId)}`),
+  createMedicationUse: (data: {
+    paciente_id: string;
+    medicamento_id?: number | null;
+    medicamento_label?: string;
+    dose?: string;
+    frequencia?: string;
+    via?: string;
+    posologia_completa?: string;
+    data_inicio?: string;
+  }): Promise<MedicationUse> =>
+    http<MedicationUse>('/api/medication-uses', { method: 'POST', body: JSON.stringify(data) }),
+  deleteMedicationUse: (id: number): Promise<{ ok: true }> =>
+    http<{ ok: true }>(`/api/medication-uses?id=${id}`, { method: 'DELETE' }),
+});

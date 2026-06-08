@@ -230,16 +230,21 @@ async function upsertBatch(batch) {
 }
 
 // ============== DOWNLOAD ==============
-function downloadCsv(url) {
+const DOWNLOAD_TIMEOUT_MS = Math.max(10_000, Number(process.env.ETL_DOWNLOAD_TIMEOUT_SEC || 300) * 1000)
+const DOWNLOAD_RETRIES = Math.max(1, Number(process.env.ETL_DOWNLOAD_RETRIES || 3))
+
+function downloadCsvOnce(url) {
   return new Promise((resolve, reject) => {
-    console.log(`📥 Baixando: ${url}`)
     const chunks = []
-    https.get(url, (res) => {
-      if (res.statusCode === 301 || res.statusCode === 302) {
-        return downloadCsv(res.headers.location).then(resolve, reject)
+    const agent = new https.Agent({ rejectUnauthorized: false })
+    const req = https.get(url, { agent, timeout: DOWNLOAD_TIMEOUT_MS }, (res) => {
+      if ([301, 302, 303, 307, 308].includes(res.statusCode) && res.headers.location) {
+        res.resume()
+        return resolve(downloadCsvOnce(res.headers.location))
       }
       if (res.statusCode !== 200) {
-        return reject(new Error(`HTTP ${res.statusCode} ao baixar ${url}`))
+        res.resume()
+        return reject(new Error('HTTP ' + res.statusCode + ' ao baixar ' + url))
       }
       const totalBytes = parseInt(res.headers['content-length'] || '0', 10)
       let received = 0
@@ -248,7 +253,7 @@ function downloadCsv(url) {
         received += chunk.length
         if (totalBytes) {
           const pct = ((received / totalBytes) * 100).toFixed(1)
-          process.stdout.write(`\r  ${(received / 1e6).toFixed(1)}MB / ${(totalBytes / 1e6).toFixed(1)}MB (${pct}%)`)
+          process.stdout.write('\r  ' + (received / 1e6).toFixed(1) + 'MB / ' + (totalBytes / 1e6).toFixed(1) + 'MB (' + pct + '%)')
         }
       })
       res.on('end', () => {
@@ -256,8 +261,33 @@ function downloadCsv(url) {
         resolve(Buffer.concat(chunks))
       })
       res.on('error', reject)
-    }).on('error', reject)
+    })
+    req.on('timeout', () => {
+      req.destroy(new Error('Timeout apos ' + (DOWNLOAD_TIMEOUT_MS/1000).toFixed(0) + 's'))
+    })
+    req.on('error', reject)
   })
+}
+
+async function downloadCsv(url) {
+  let lastError = null
+  for (let attempt = 1; attempt <= DOWNLOAD_RETRIES; attempt++) {
+    try {
+      if (attempt > 1) {
+        const backoffMs = Math.min(30_000, 2000 * Math.pow(2, attempt - 2))
+        console.log('   Aguardando ' + (backoffMs/1000).toFixed(0) + 's antes de tentar de novo (tentativa ' + attempt + '/' + DOWNLOAD_RETRIES + ')...')
+        await new Promise((r) => setTimeout(r, backoffMs))
+      }
+      console.log('Tentativa ' + attempt + '/' + DOWNLOAD_RETRIES + ' - baixando: ' + url)
+      const buf = await downloadCsvOnce(url)
+      if (attempt > 1) console.log('   Sucesso na tentativa ' + attempt)
+      return buf
+    } catch (err) {
+      lastError = err
+      console.error('   Tentativa ' + attempt + ' falhou: ' + err.message)
+    }
+  }
+  throw new Error('Download falhou apos ' + DOWNLOAD_RETRIES + ' tentativas. Ultimo erro: ' + (lastError && lastError.message))
 }
 
 // ============== MAIN ==============

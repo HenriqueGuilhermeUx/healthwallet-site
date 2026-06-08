@@ -3,7 +3,8 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, Download, Loader2, FileText, Trash2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Download, Loader2, FileText, Trash2, AlertCircle, Send } from 'lucide-react'
+import { EmailDeliveryButton } from '@/components/EmailDeliveryButton';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, type PedidoExame } from '@/lib/api';
 
@@ -71,9 +72,16 @@ export default function ExamRequestDetailPage() {
             target="_blank"
             rel="noopener"
             className="px-3 py-1.5 rounded bg-emerald-600 text-white text-sm hover:bg-emerald-700 flex items-center gap-1"
+            title="Baixar PDF"
           >
-            <Download className="w-4 h-4" /> Baixar PDF
+            <Download className="w-4 h-4" />
           </a>
+          <EmailDeliveryButton
+            documentType="exame"
+            documentId={pedido.id}
+            defaultEmail={null}
+            label=""
+          />
           <button
             onClick={handleDelete}
             disabled={deleting}

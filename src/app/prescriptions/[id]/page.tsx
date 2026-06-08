@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { api, type Receita } from '@/lib/api'
 import { ClicksignWidget } from '@/components/ClicksignWidget'
 import { ArrowLeft, Send, Loader2, FileText, CheckCircle2, ExternalLink, Download, Trash2, AlertCircle, LogIn } from 'lucide-react'
+import { EmailDeliveryButton } from '@/components/EmailDeliveryButton'
 import { toast } from 'sonner'
 
 const STATUS_BADGE: Record<string, { label: string; cls: string }> = {
@@ -186,19 +187,24 @@ export default function PrescriptionDetailPage() {
       </div>
 
       {receita.status === 'rascunho' && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6 flex items-center justify-between gap-4">
-          <div>
-            <p className="font-semibold text-amber-900">Esta receita ainda é um rascunho</p>
-            <p className="text-sm text-amber-800">Envie para que o sistema gere o PDF e abra a tela de assinatura digital.</p>
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-6">
+          <p className="font-semibold text-amber-900 mb-1">Esta receita ainda é um rascunho</p>
+          <p className="text-sm text-amber-800 mb-4">Envie para o paciente ou para a tela de assinatura digital.</p>
+          <div className="flex flex-wrap gap-2">
+            <EmailDeliveryButton
+              documentType="receita"
+              documentId={receita.id}
+              defaultEmail={null}
+            />
+            <button
+              onClick={handleSend}
+              disabled={sending}
+              className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 disabled:opacity-50"
+            >
+              {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              Enviar p/ assinatura (Clicksign)
+            </button>
           </div>
-          <button
-            onClick={handleSend}
-            disabled={sending}
-            className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl font-semibold hover:bg-emerald-700 disabled:opacity-50 whitespace-nowrap"
-          >
-            {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-            Enviar p/ assinatura
-          </button>
         </div>
       )}
 

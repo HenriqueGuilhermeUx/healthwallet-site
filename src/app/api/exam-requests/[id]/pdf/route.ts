@@ -75,7 +75,9 @@ export async function GET(
       medico,
     });
 
-    return new NextResponse(pdfBuffer, {
+    // NextResponse exige BodyInit — converter Buffer pra Uint8Array
+    const body = new Uint8Array(pdfBuffer);
+    return new NextResponse(body, {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',

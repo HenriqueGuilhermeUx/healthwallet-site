@@ -4,7 +4,7 @@ import { ReactNode } from 'react'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { Toaster } from 'sonner'
 import Link from 'next/link'
-import { Heart, LogOut, User, FileText } from 'lucide-react'
+import { Heart, LogOut, User, FileText, FileSearch } from "lucide-react"
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 

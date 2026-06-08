@@ -19,6 +19,7 @@ import {
   Send,
   Calendar,
   ChevronDown,
+  FileSearch,
   ChevronUp,
   Loader2,
   Download

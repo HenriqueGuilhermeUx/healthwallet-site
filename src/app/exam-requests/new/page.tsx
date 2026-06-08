@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ArrowLeft, Plus, Trash2, Save, Loader2, Search, FileText } from 'lucide-react';
@@ -185,7 +185,7 @@ function CidAutocomplete({
   );
 }
 
-export default function NewExamRequestPage() {
+function NewExamInner() {
   const { professional, loading: authLoading } = useAuth();
   const router = useRouter();
   const search = useSearchParams();
@@ -380,4 +380,16 @@ export default function NewExamRequestPage() {
       </main>
     </div>
   );
+}
+
+export default function NewExamRequestPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-sky-600" />
+      </div>
+    }>
+      <NewExamInner />
+    </Suspense>
+  )
 }

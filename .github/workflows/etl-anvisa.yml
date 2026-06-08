@@ -23,6 +23,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
+    # Força as actions a rodarem em Node 24 (silencia warning de Node 20 deprecated)
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -30,7 +34,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: '22'
+          node-version: '24'
           cache: 'npm'
 
       - name: Instalar dependências
@@ -41,6 +45,10 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           ANVISA_CSV_URL: ${{ github.event.inputs.csv_url || vars.ANVISA_CSV_URL || secrets.ANVISA_CSV_URL }}
+          # Site do governo brasileiro usa cert fora do CA bundle padrão.
+          # ETL baixa dados públicos, então é aceitável ignorar validação.
+          # Não é o mesmo que confiar em MITM — é só aceitar o gov.br.
+          NODE_TLS_REJECT_UNAUTHORIZED: '0'
           ETL_BATCH_SIZE: ${{ vars.ETL_BATCH_SIZE || '500' }}
           ETL_ENCODING: ${{ vars.ETL_ENCODING || 'utf-8' }}
           ETL_DRY_RUN: ${{ github.event.inputs.dry_run && 'true' || 'false' }}
@@ -54,3 +62,4 @@ jobs:
           echo "- Execução: $(date -u)" >> $GITHUB_STEP_SUMMARY
           echo "- Status: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
           echo "- Dry-run: ${{ github.event.inputs.dry_run }}" >> $GITHUB_STEP_SUMMARY
+          echo "- URL: ${{ github.event.inputs.csv_url || vars.ANVISA_CSV_URL || secrets.ANVISA_CSV_URL || '(nenhuma)' }}" >> $GITHUB_STEP_SUMMARY

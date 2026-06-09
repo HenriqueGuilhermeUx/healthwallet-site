@@ -1,18 +1,59 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useEffect, useState } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
-import { Heart, Mail, Lock, Loader2 } from 'lucide-react'
+import { Heart, Mail, Lock, Loader2, ShieldCheck } from 'lucide-react'
+
+const NEXA_API_URL = 'https://nexa-backend-p2u0.onrender.com/api/v1'
 
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
+  const [nexaLoading, setNexaLoading] = useState(false)
+
   const { signIn } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
+
+  useEffect(() => {
+    const nexaToken = searchParams.get('nexaToken')
+
+    if (nexaToken) {
+      loginWithNexaToken(nexaToken)
+    }
+  }, [searchParams])
+
+  const loginWithNexaToken = async (nexaToken: string) => {
+    setNexaLoading(true)
+
+    try {
+      const response = await fetch(`${NEXA_API_URL}/nexa-id/validate/${nexaToken}`)
+      const data = await response.json()
+
+      if (!data.success || !data.user) {
+        toast.error('Token Nexa ID inválido ou expirado')
+        return
+      }
+
+      localStorage.setItem('nexa_user', JSON.stringify(data.user))
+      localStorage.setItem('nexa_token', nexaToken)
+
+      toast.success(`Bem-vindo, ${data.user.fullName || data.user.username}!`)
+      router.push('/dashboard')
+    } catch (err) {
+      toast.error('Erro ao entrar com Nexa ID')
+    } finally {
+      setNexaLoading(false)
+    }
+  }
+
+  const handleNexaLogin = () => {
+    toast.info('Abra pelo app Nexa para entrar automaticamente com Nexa ID.')
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -45,6 +86,32 @@ export default function LoginPage() {
             </div>
             <h1 className="text-2xl font-bold text-gray-900">Entrar</h1>
             <p className="text-gray-600 mt-2">Acesse sua conta de profissional</p>
+          </div>
+
+          {nexaLoading ? (
+            <div className="mb-6 rounded-xl border border-blue-100 bg-blue-50 p-4 flex items-center gap-3">
+              <Loader2 className="w-5 h-5 animate-spin text-blue-600" />
+              <div>
+                <p className="font-semibold text-blue-900">Validando Nexa ID...</p>
+                <p className="text-sm text-blue-700">Aguarde um instante.</p>
+              </div>
+            </div>
+          ) : null}
+
+          <button
+            type="button"
+            onClick={handleNexaLogin}
+            disabled={nexaLoading}
+            className="w-full py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 mb-5"
+          >
+            <ShieldCheck className="w-5 h-5" />
+            Entrar com Nexa ID
+          </button>
+
+          <div className="flex items-center gap-3 mb-5">
+            <div className="h-px bg-gray-200 flex-1" />
+            <span className="text-xs text-gray-400 font-medium">ou entre com e-mail</span>
+            <div className="h-px bg-gray-200 flex-1" />
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6">

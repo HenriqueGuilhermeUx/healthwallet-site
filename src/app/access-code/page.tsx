@@ -10,29 +10,40 @@ export default function AccessCodePage() {
   const [loading, setLoading] = useState(false)
 
   async function handleAccess() {
-    if (!code.trim()) {
-      alert('Digite o código de acesso')
-      return
-    }
-
-    setLoading(true)
-
-    const { data, error } = await supabase
-      .from('shared_access')
-      .select('*')
-      .eq('access_code', code.trim().toUpperCase())
-      .gt('expires_at', new Date().toISOString())
-      .single()
-
-    setLoading(false)
-
-    if (error || !data) {
-      alert('Código inválido ou expirado')
-      return
-    }
-
-    router.push(`/patient/${data.patient_id}/summary`)
+  if (!code.trim()) {
+    alert('Digite o código de acesso')
+    return
   }
+
+  setLoading(true)
+
+  const normalizedCode = code.trim().toUpperCase()
+
+  const { data, error } = await supabase
+    .from('shared_access')
+    .select('*')
+    .eq('access_code', normalizedCode)
+    .maybeSingle()
+
+  setLoading(false)
+
+  if (error) {
+    alert(`Erro Supabase: ${error.message}`)
+    return
+  }
+
+  if (!data) {
+    alert('Código não encontrado')
+    return
+  }
+
+  if (data.expires_at && new Date(data.expires_at) < new Date()) {
+    alert('Código expirado')
+    return
+  }
+
+  router.push(`/patient/${data.patient_id}/summary`)
+}
 
   return (
     <main className="min-h-screen flex items-center justify-center p-6 bg-slate-50">

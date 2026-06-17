@@ -151,27 +151,6 @@ export default function PatientPage({ params }: { params: Promise<{ id: string }
   }
 }
   
-      // Simulated medications
-      const medications = access.permissions?.medications ? [
-        { id: '1', name: 'Losartana', dosage: '50mg', frequency: '1x ao dia' }
-      ] : []
-
-      setPatientData({
-        profile: profileData,
-        exams,
-        medications,
-        medscore: { score: profileData.medScore, level: 'Bom' },
-        allergies: profileData.allergies,
-      })
-
-    } catch (err) {
-      console.error('Error loading patient data:', err)
-      toast.error('Erro ao carregar dados do paciente')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const calculateAge = (birthDate: string) => {
     const today = new Date()
     const birth = new Date(birthDate)

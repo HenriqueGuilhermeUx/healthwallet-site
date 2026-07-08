@@ -157,14 +157,14 @@ export default function DashboardPage() {
     <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="text-center mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Olá, {professional.full_name}</h1>
-        <p className="text-gray-600 mt-1">Acesse pacientes, teleconsultas e documentos profissionais</p>
+        <p className="text-gray-600 mt-1">Acesse pacientes, teleconsultas, documentos profissionais e dados autorizados</p>
       </div>
 
       <div className="grid md:grid-cols-3 gap-4 mb-8">
         <Link href="/teleconsultas" className="bg-gradient-to-br from-cyan-600 to-blue-700 text-white rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
           <Video className="w-8 h-8 mb-3" />
           <h2 className="font-bold text-lg">Teleconsultas</h2>
-          <p className="text-sm text-white/80 mt-1">Agendar, confirmar, iniciar, lembrar e concluir consultas.</p>
+          <p className="text-sm text-white/80 mt-1">Agendar, assumir solicitações, iniciar, lembrar, concluir e registrar orientações.</p>
           <span className="inline-flex items-center gap-1 mt-4 text-sm font-semibold">Abrir agenda <ArrowRight className="w-4 h-4" /></span>
         </Link>
 
@@ -176,15 +176,15 @@ export default function DashboardPage() {
 
         <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
           <MessageCircle className="w-8 h-8 text-purple-600 mb-3" />
-          <h2 className="font-bold text-lg">Lembretes e CRM</h2>
-          <p className="text-sm text-gray-600 mt-1">Base para automações, orientações e relacionamento pós-consulta.</p>
+          <h2 className="font-bold text-lg">CRM multiprofissional</h2>
+          <p className="text-sm text-gray-600 mt-1">Lembretes, orientações e relacionamento pós-consulta para equipes de saúde.</p>
         </div>
       </div>
 
       <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-8 flex items-start gap-3">
         <ReceiptText className="w-5 h-5 text-emerald-700 mt-0.5" />
         <p className="text-sm text-emerald-900">
-          O módulo profissional evolui para plano pago com teleconsulta, agenda, envio de receitas/orientações, CRM e pagamentos Pix.
+          O módulo profissional evolui para plano pago com teleconsulta, agenda, CRM, pagamentos Pix e documentos profissionais. Receitas/prescrições ficam condicionadas à habilitação do profissional e à assinatura/validação adequada.
         </p>
       </div>
 
@@ -249,7 +249,7 @@ export default function DashboardPage() {
           </li>
           <li className="flex items-start gap-2">
             <Send className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" />
-            <span>Após acessar, você pode enviar documentos e orientações</span>
+            <span>Após acessar, você pode enviar documentos, orientações e prescrições quando aplicável</span>
           </li>
         </ul>
       </div>

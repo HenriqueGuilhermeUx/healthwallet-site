@@ -165,7 +165,6 @@ export async function POST(req: NextRequest) {
         signature_provider: 'mydatamed_simple',
         signature_level: 'simple_audit_trail',
         signature_validation_url: verificationUrl,
-        signature_validation_url: verificationUrl,
         verification_url: verificationUrl,
         qr_payload: verificationUrl,
         document_hash: documentHash,

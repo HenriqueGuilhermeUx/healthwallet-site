@@ -7,7 +7,6 @@ import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import {
   BadgeCheck,
-  CalendarDays,
   CheckCircle,
   Copy,
   FileText,
@@ -16,7 +15,6 @@ import {
   QrCode,
   ShieldAlert,
   ShieldCheck,
-  User,
 } from 'lucide-react'
 
 const DOCUMENT_TYPES = [
@@ -34,7 +32,8 @@ export default function AssinaturasPage() {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [documents, setDocuments] = useState<any[]>([])
-  const [generatedLink, setGeneratedLink] = useState('')
+  const [generatedValidation, setGeneratedValidation] = useState('')
+  const [patientAckLink, setPatientAckLink] = useState('')
   const [form, setForm] = useState({
     patient_id: '',
     patient_name: '',
@@ -43,7 +42,7 @@ export default function AssinaturasPage() {
     document_type: 'orientation',
     title: 'Orientações pós-consulta',
     body: '',
-    expires_days: '7',
+    professional_cpf: '',
   })
 
   useEffect(() => {
@@ -51,7 +50,10 @@ export default function AssinaturasPage() {
   }, [user, authLoading, router])
 
   useEffect(() => {
-    if (user && professional) loadDocuments()
+    if (user && professional) {
+      setForm((current) => ({ ...current, professional_cpf: professional.cpf || '' }))
+      loadDocuments()
+    }
   }, [user, professional])
 
   const canPrescribe = Boolean((professional as any)?.can_prescribe)
@@ -70,7 +72,19 @@ export default function AssinaturasPage() {
     setDocuments(data || [])
   }
 
-  async function createSignatureRequest() {
+  function onlyDigits(value: string) {
+    return String(value || '').replace(/\D/g, '')
+  }
+
+  function formatCpf(value: string) {
+    const digits = onlyDigits(value).slice(0, 11)
+    return digits
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+  }
+
+  async function createProfessionalSignedDocument() {
     if (!user || !professional) return
 
     if (!form.patient_id || !form.title || !form.body) {
@@ -78,13 +92,20 @@ export default function AssinaturasPage() {
       return
     }
 
+    const professionalCpf = onlyDigits(form.professional_cpf || professional.cpf || '')
+    if (professionalCpf.length < 11) {
+      toast.error('Informe o CPF do profissional para registrar a assinatura')
+      return
+    }
+
     if (form.document_type === 'prescription' && !canPrescribe) {
-      toast.error('Este profissional ainda não está habilitado no sistema para emitir prescrição/receita.')
+      toast.error('Prescrição bloqueada: habilite can_prescribe no cadastro profissional.')
       return
     }
 
     setLoading(true)
-    setGeneratedLink('')
+    setGeneratedValidation('')
+    setPatientAckLink('')
 
     const documentPayload = {
       appointment_id: form.appointment_id || null,
@@ -97,7 +118,7 @@ export default function AssinaturasPage() {
       status: 'pending_signature',
       requires_prescription_permission: form.document_type === 'prescription' || form.document_type === 'exam_request',
       signature_provider: 'mydatamed_simple',
-      signature_level: 'simple_audit_trail',
+      signature_level: 'professional_simple_audit_trail',
       metadata: {
         patient_name: form.patient_name || null,
         patient_email: form.patient_email || null,
@@ -120,8 +141,6 @@ export default function AssinaturasPage() {
       return
     }
 
-    const expiresAt = new Date(Date.now() + Number(form.expires_days || 7) * 24 * 60 * 60 * 1000).toISOString()
-
     const { data: tokenData, error: tokenError } = await supabase
       .from('sign_tokens')
       .insert({
@@ -130,37 +149,97 @@ export default function AssinaturasPage() {
         professional_user_id: user.id,
         professional_id: professional.id,
         patient_id: form.patient_id,
-        patient_name: form.patient_name || null,
-        patient_email: form.patient_email || null,
-        signer_role: 'patient',
+        patient_name: professional.full_name,
+        patient_email: user.email,
+        signer_role: 'professional',
         status: 'pending',
-        expires_at: expiresAt,
+        expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
         metadata: {
           document_type: form.document_type,
           document_title: form.title,
-          generated_from: 'assinaturas_page',
+          generated_from: 'assinaturas_professional_signature',
+          patient_name: form.patient_name || null,
+          patient_email: form.patient_email || null,
         },
       })
       .select('*')
       .single()
 
     if (tokenError || !tokenData) {
-      toast.error(tokenError?.message || 'Documento criado, mas erro ao gerar link de assinatura')
+      toast.error(tokenError?.message || 'Documento criado, mas erro ao preparar assinatura')
       setLoading(false)
       return
     }
 
-    const link = `${window.location.origin}/sign/${tokenData.token}`
-    setGeneratedLink(link)
+    const response = await fetch('/api/signatures/complete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        token: tokenData.token,
+        signer_name: professional.full_name,
+        signer_email: user.email,
+        signer_cpf: professionalCpf,
+        accepted_terms: true,
+      }),
+    })
+
+    const payload = await response.json()
+
+    if (!response.ok) {
+      toast.error(payload.error || 'Documento criado, mas erro ao assinar')
+      setLoading(false)
+      return
+    }
 
     await supabase
       .from('professional_clinical_documents')
-      .update({ simple_signature_token_id: tokenData.id })
+      .update({
+        verification_url: payload.verification_url,
+        qr_payload: payload.verification_url,
+        document_hash: payload.document_hash,
+        sent_to_patient_at: new Date().toISOString(),
+      })
       .eq('id', document.id)
 
-    toast.success('Link de assinatura criado')
+    setGeneratedValidation(payload.verification_url)
+    toast.success('Documento assinado pelo profissional')
     await loadDocuments()
     setLoading(false)
+  }
+
+  async function createPatientAcknowledgementLink(doc: any) {
+    if (!user || !professional) return
+
+    const { data: tokenData, error } = await supabase
+      .from('sign_tokens')
+      .insert({
+        document_id: doc.id,
+        appointment_id: doc.appointment_id || null,
+        professional_user_id: user.id,
+        professional_id: professional.id,
+        patient_id: doc.patient_id,
+        patient_name: doc.metadata?.patient_name || null,
+        patient_email: doc.metadata?.patient_email || null,
+        signer_role: 'patient',
+        status: 'pending',
+        expires_at: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+        metadata: {
+          generated_from: 'patient_acknowledgement_after_professional_signature',
+          document_title: doc.title,
+          document_type: doc.document_type,
+        },
+      })
+      .select('*')
+      .single()
+
+    if (error || !tokenData) {
+      toast.error(error?.message || 'Erro ao gerar aceite do paciente')
+      return
+    }
+
+    const link = `${window.location.origin}/sign/${tokenData.token}`
+    setPatientAckLink(link)
+    toast.success('Link de ciência/aceite do paciente gerado')
   }
 
   async function copy(value: string) {
@@ -189,30 +268,30 @@ export default function AssinaturasPage() {
           </div>
           <div>
             <p className="text-white/75 text-sm font-medium">Produção ON</p>
-            <h1 className="text-2xl md:text-3xl font-bold">Assinatura própria MyDataMed</h1>
+            <h1 className="text-2xl md:text-3xl font-bold">Assinatura profissional MyDataMed</h1>
             <p className="text-white/80 mt-2 max-w-3xl">
-              Gere documentos profissionais com token, aceite por CPF, IP, user agent, timestamp, hash SHA-256 e link público de validação.
+              O profissional assina o documento. O paciente recebe e pode conferir a validade. Aceite do paciente é opcional, apenas para ciência/consentimento.
             </p>
           </div>
         </div>
       </header>
 
       <section className="grid md:grid-cols-3 gap-3">
-        <InfoCard icon={FileText} title="Documentos" text="Orientações, planos, relatórios, declarações e documentos profissionais." />
-        <InfoCard icon={QrCode} title="QR / Validação" text="Cada assinatura gera hash e link público /verify/[hash]." />
-        <InfoCard icon={ShieldCheck} title="Auditoria" text="CPF, IP, navegador, data/hora, token e snapshot do documento." />
+        <InfoCard icon={FileText} title="Emissão profissional" text="Orientações, planos, relatórios, declarações e documentos profissionais assinados pelo emissor." />
+        <InfoCard icon={QrCode} title="QR / validação" text="Cada assinatura gera hash e link público /verify/[hash]." />
+        <InfoCard icon={ShieldCheck} title="Auditoria" text="CPF do profissional, IP, navegador, data/hora, token e snapshot do documento." />
       </section>
 
       <section className="bg-yellow-50 border border-yellow-200 rounded-2xl p-4 text-sm text-yellow-900 flex gap-3">
         <ShieldAlert className="w-5 h-5 mt-0.5 flex-shrink-0" />
         <p>
-          <strong>Regra de segurança:</strong> esta assinatura própria é ideal para consentimentos, orientações, relatórios, planos e documentos profissionais. Para receitas medicamentosas ou documentos regulados, a validade externa pode exigir habilitação específica, certificado/assinatura qualificada ou validação externa.
+          <strong>Regra correta:</strong> documentos profissionais são assinados pelo profissional. O paciente só assina quando for termo de aceite, ciência, autorização ou consentimento. Para receitas medicamentosas ou documentos regulados, a validade externa pode exigir habilitação específica, certificado/assinatura qualificada ou validação externa.
         </p>
       </section>
 
       <div className="grid lg:grid-cols-[1fr_0.85fr] gap-6">
         <section className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm space-y-4">
-          <h2 className="text-xl font-bold text-gray-900">Novo documento para assinatura</h2>
+          <h2 className="text-xl font-bold text-gray-900">Novo documento profissional</h2>
 
           <div className="grid md:grid-cols-3 gap-3">
             <Input label="Patient ID" value={form.patient_id} onChange={(value: string) => setForm({ ...form, patient_id: value })} placeholder="UUID do paciente" />
@@ -222,7 +301,7 @@ export default function AssinaturasPage() {
 
           <Input label="Appointment ID opcional" value={form.appointment_id} onChange={(value: string) => setForm({ ...form, appointment_id: value })} placeholder="UUID da teleconsulta, se houver" />
 
-          <div className="grid md:grid-cols-[1fr_120px] gap-3">
+          <div className="grid md:grid-cols-[1fr_180px] gap-3">
             <div>
               <label className="text-sm font-medium text-gray-700 mb-1 block">Tipo de documento</label>
               <select
@@ -237,7 +316,7 @@ export default function AssinaturasPage() {
               )}
             </div>
 
-            <Input label="Expira em dias" value={form.expires_days} onChange={(value: string) => setForm({ ...form, expires_days: value })} />
+            <Input label="CPF do profissional" value={form.professional_cpf} onChange={(value: string) => setForm({ ...form, professional_cpf: formatCpf(value) })} placeholder="000.000.000-00" />
           </div>
 
           <Input label="Título" value={form.title} onChange={(value: string) => setForm({ ...form, title: value })} />
@@ -253,18 +332,18 @@ export default function AssinaturasPage() {
           </div>
 
           <button
-            onClick={createSignatureRequest}
+            onClick={createProfessionalSignedDocument}
             disabled={loading}
             className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white px-5 py-3 font-semibold disabled:opacity-50"
           >
             {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <BadgeCheck className="w-5 h-5" />}
-            Gerar link de assinatura
+            Assinar como profissional e enviar ao paciente
           </button>
         </section>
 
         <aside className="space-y-4">
           <section className="bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
-            <h2 className="font-bold text-gray-900 mb-3">Profissional</h2>
+            <h2 className="font-bold text-gray-900 mb-3">Profissional emissor</h2>
             <div className="space-y-2 text-sm text-gray-600">
               <p><strong>Nome:</strong> {professional.full_name}</p>
               <p><strong>Tipo:</strong> {professional.professional_type || 'Profissional de saúde'}</p>
@@ -273,17 +352,29 @@ export default function AssinaturasPage() {
             </div>
           </section>
 
-          {generatedLink && (
+          {generatedValidation && (
             <section className="bg-emerald-50 rounded-3xl border border-emerald-200 p-6 shadow-sm">
               <h2 className="font-bold text-emerald-900 mb-2 flex items-center gap-2">
                 <CheckCircle className="w-5 h-5" />
-                Link gerado
+                Documento assinado
               </h2>
-              <p className="text-sm text-emerald-800 mb-3">Envie este link ao paciente/assinante.</p>
-              <div className="rounded-xl bg-white border p-3 text-sm break-all text-emerald-900">{generatedLink}</div>
-              <button onClick={() => copy(generatedLink)} className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white px-4 py-2 font-semibold">
+              <p className="text-sm text-emerald-800 mb-3">Este é o link público de validação do documento.</p>
+              <div className="rounded-xl bg-white border p-3 text-sm break-all text-emerald-900">{generatedValidation}</div>
+              <button onClick={() => copy(generatedValidation)} className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white px-4 py-2 font-semibold">
                 <Copy className="w-4 h-4" />
-                Copiar link
+                Copiar validação
+              </button>
+            </section>
+          )}
+
+          {patientAckLink && (
+            <section className="bg-blue-50 rounded-3xl border border-blue-200 p-6 shadow-sm">
+              <h2 className="font-bold text-blue-900 mb-2">Aceite/ciência do paciente</h2>
+              <p className="text-sm text-blue-800 mb-3">Use apenas quando quiser registrar ciência, consentimento ou autorização do paciente.</p>
+              <div className="rounded-xl bg-white border p-3 text-sm break-all text-blue-900">{patientAckLink}</div>
+              <button onClick={() => copy(patientAckLink)} className="mt-3 w-full inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 text-white px-4 py-2 font-semibold">
+                <Copy className="w-4 h-4" />
+                Copiar aceite
               </button>
             </section>
           )}
@@ -299,11 +390,18 @@ export default function AssinaturasPage() {
                       <span className="text-xs rounded-full bg-white border px-2 py-0.5 text-gray-600">{doc.status}</span>
                     </div>
                     <p className="text-xs text-gray-500 mt-1">{new Date(doc.created_at).toLocaleDateString('pt-BR')}</p>
-                    {doc.verification_url && (
-                      <button onClick={() => copy(doc.verification_url)} className="text-xs text-emerald-700 mt-2 inline-flex items-center gap-1">
-                        <Copy className="w-3 h-3" /> Copiar validação
-                      </button>
-                    )}
+                    <div className="flex flex-wrap gap-3 mt-2">
+                      {doc.verification_url && (
+                        <button onClick={() => copy(doc.verification_url)} className="text-xs text-emerald-700 inline-flex items-center gap-1">
+                          <Copy className="w-3 h-3" /> Copiar validação
+                        </button>
+                      )}
+                      {doc.status === 'signed' && (
+                        <button onClick={() => createPatientAcknowledgementLink(doc)} className="text-xs text-blue-700 inline-flex items-center gap-1">
+                          <Copy className="w-3 h-3" /> Gerar aceite opcional
+                        </button>
+                      )}
+                    </div>
                   </div>
                 ))}
               </div>

@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
 
     const documentHash = createHash('sha256').update(canonicalPayload).digest('hex')
     const verificationSlug = documentHash
-    const verificationUrl = `${baseUrl}/verify/${verificationSlug}`
+    const verificationUrl = `${baseUrl}/validar/${verificationSlug}`
 
     const auditTrail = {
       steps: [

@@ -14,7 +14,11 @@ import {
   Send,
   History,
   Loader2,
-  ArrowRight
+  ArrowRight,
+  Video,
+  CalendarDays,
+  MessageCircle,
+  ReceiptText,
 } from 'lucide-react'
 
 interface AccessCode {
@@ -67,7 +71,6 @@ export default function DashboardPage() {
 
   const handleCodeChange = (index: number, value: string) => {
     if (value.length > 1) {
-      // Handle paste
       const digits = value.replace(/\D/g, '').slice(0, 6).split('')
       const newCode = [...code]
       digits.forEach((digit, i) => {
@@ -76,7 +79,6 @@ export default function DashboardPage() {
         }
       })
       setCode(newCode)
-      // Focus last input
       const lastFilledIndex = Math.min(index + digits.length, 5)
       document.getElementById(`code-${lastFilledIndex}`)?.focus()
     } else {
@@ -84,7 +86,6 @@ export default function DashboardPage() {
       newCode[index] = value.replace(/\D/g, '')
       setCode(newCode)
 
-      // Auto advance
       if (value && index < 5) {
         document.getElementById(`code-${index + 1}`)?.focus()
       }
@@ -107,7 +108,6 @@ export default function DashboardPage() {
     setSubmitting(true)
 
     try {
-      // Find the access code
       const { data: accessCode, error: findError } = await supabase
         .from('access_codes')
         .select('*')
@@ -122,7 +122,6 @@ export default function DashboardPage() {
         return
       }
 
-      // Update the access code
       const { error: updateError } = await supabase
         .from('access_codes')
         .update({
@@ -155,13 +154,40 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-8">
+    <div className="max-w-5xl mx-auto px-4 py-8">
       <div className="text-center mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Olá, {professional.full_name}</h1>
-        <p className="text-gray-600 mt-1">Digite o código de acesso do paciente</p>
+        <p className="text-gray-600 mt-1">Acesse pacientes, teleconsultas e documentos profissionais</p>
       </div>
 
-      {/* Code Entry */}
+      <div className="grid md:grid-cols-3 gap-4 mb-8">
+        <Link href="/teleconsultas" className="bg-gradient-to-br from-cyan-600 to-blue-700 text-white rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
+          <Video className="w-8 h-8 mb-3" />
+          <h2 className="font-bold text-lg">Teleconsultas</h2>
+          <p className="text-sm text-white/80 mt-1">Agendar, confirmar, iniciar, lembrar e concluir consultas.</p>
+          <span className="inline-flex items-center gap-1 mt-4 text-sm font-semibold">Abrir agenda <ArrowRight className="w-4 h-4" /></span>
+        </Link>
+
+        <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+          <CalendarDays className="w-8 h-8 text-emerald-600 mb-3" />
+          <h2 className="font-bold text-lg">Agenda integrada</h2>
+          <p className="text-sm text-gray-600 mt-1">Organize consultas online e dados autorizados por evento.</p>
+        </div>
+
+        <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
+          <MessageCircle className="w-8 h-8 text-purple-600 mb-3" />
+          <h2 className="font-bold text-lg">Lembretes e CRM</h2>
+          <p className="text-sm text-gray-600 mt-1">Base para automações, orientações e relacionamento pós-consulta.</p>
+        </div>
+      </div>
+
+      <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-8 flex items-start gap-3">
+        <ReceiptText className="w-5 h-5 text-emerald-700 mt-0.5" />
+        <p className="text-sm text-emerald-900">
+          O módulo profissional evolui para plano pago com teleconsulta, agenda, envio de receitas/orientações, CRM e pagamentos Pix.
+        </p>
+      </div>
+
       <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-8 mb-8">
         <div className="flex items-center justify-center gap-3 mb-6">
           <KeyRound className="w-8 h-8 text-emerald-600" />
@@ -207,7 +233,6 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Instructions */}
       <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 mb-8">
         <div className="flex items-center gap-2 mb-4">
           <Shield className="w-5 h-5 text-emerald-600" />
@@ -229,7 +254,6 @@ export default function DashboardPage() {
         </ul>
       </div>
 
-      {/* Recent Access */}
       {recentAccess.length > 0 && (
         <div className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6">
           <div className="flex items-center justify-between mb-4">
@@ -253,10 +277,7 @@ export default function DashboardPage() {
                       {new Date(access.created_at).toLocaleDateString('pt-BR')}
                     </p>
                   </div>
-                  <Link
-                    href={`/patient/${access.id}`}
-                    className="text-emerald-600 text-sm font-medium hover:underline"
-                  >
+                  <Link href={`/patient/${access.id}`} className="text-emerald-600 text-sm font-medium hover:underline">
                     Ver →
                   </Link>
                 </div>

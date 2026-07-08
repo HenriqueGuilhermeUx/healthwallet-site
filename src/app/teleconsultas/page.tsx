@@ -23,6 +23,12 @@ import {
   ShieldCheck,
   User,
   Mail,
+  Copy,
+  CreditCard,
+  MessageCircle,
+  ReceiptText,
+  Sparkles,
+  Wallet,
 } from 'lucide-react'
 
 const DEFAULT_PERMISSIONS = {
@@ -75,15 +81,32 @@ export default function TeleconsultasPage() {
     const { data, error } = await supabase
       .from('telemedicine_appointments')
       .select('*')
-      .eq('professional_id', professional.id)
+      .or(`professional_id.eq.${professional.id},professional_id.is.null`)
       .order('preferred_date', { ascending: false })
       .order('preferred_time', { ascending: false })
+      .order('created_at', { ascending: false })
 
     if (error) {
       toast.error('Erro ao carregar teleconsultas. Rode o SQL_TELECONSULTA_MOTOR_V1.sql no Supabase.')
     }
 
-    setAppointments(data || [])
+    const rows = data || []
+    setAppointments(rows)
+
+    const nextRoomLinks: Record<string, string> = {}
+    const nextNotes: Record<string, { orientation: string; prescription: string; professional: string }> = {}
+
+    rows.forEach((item) => {
+      nextRoomLinks[item.id] = item.room_url || item.meet_url || ''
+      nextNotes[item.id] = {
+        orientation: item.orientation_text || '',
+        prescription: item.prescription_text || '',
+        professional: item.professional_notes || '',
+      }
+    })
+
+    setRoomLinks(nextRoomLinks)
+    setNotes(nextNotes)
     setLoading(false)
   }
 
@@ -113,6 +136,7 @@ export default function TeleconsultasPage() {
       return
     }
 
+    const scheduledAt = `${form.preferred_date}T${form.preferred_time}:00-03:00`
     const now = new Date().toISOString()
     const payload = {
       user_id: form.patient_id,
@@ -121,15 +145,19 @@ export default function TeleconsultasPage() {
       patient_email: form.patient_email || null,
       professional_id: professional.id,
       professional_name: professional.full_name,
+      professional_email: professional.email || user.email,
       specialty: form.specialty || professional.specialty || 'Clínica geral',
       reason: form.reason || null,
       preferred_date: form.preferred_date,
       preferred_time: form.preferred_time,
+      scheduled_at: scheduledAt,
       duration_minutes: Number(form.duration_minutes || 30),
       status: 'scheduled',
       provider: 'manual_link',
       room_url: form.room_url || null,
       meet_url: form.room_url || null,
+      professional_confirmed: true,
+      professional_confirmed_at: now,
       shared_data_permissions: DEFAULT_PERMISSIONS,
       payment_status: 'not_required',
       created_at: now,
@@ -147,7 +175,17 @@ export default function TeleconsultasPage() {
       return
     }
 
-    await logEvent(data.id, 'appointment_scheduled', 'Profissional agendou teleconsulta.', data.patient_id)
+    await logEvent(data.id, 'appointment_scheduled', 'Profissional agendou teleconsulta.', data.patient_id, {
+      scheduled_at: scheduledAt,
+      room_url: form.room_url || null,
+    })
+
+    await upsertCrmContact({
+      patient_id: form.patient_id,
+      patient_name: form.patient_name,
+      patient_email: form.patient_email,
+      appointment_id: data.id,
+    })
 
     toast.success('Teleconsulta agendada')
     setShowForm(false)
@@ -179,13 +217,82 @@ export default function TeleconsultasPage() {
     })
   }
 
+  async function upsertCrmContact({ patient_id, patient_name, patient_email, appointment_id }: any) {
+    if (!professional || !user || !patient_id) return
+
+    const { data: existing } = await supabase
+      .from('professional_crm_contacts')
+      .select('id')
+      .eq('professional_user_id', user.id)
+      .eq('patient_id', patient_id)
+      .maybeSingle()
+
+    if (existing?.id) {
+      await supabase
+        .from('professional_crm_contacts')
+        .update({
+          patient_name: patient_name || null,
+          patient_email: patient_email || null,
+          lifecycle_stage: 'patient',
+          last_contact_at: new Date().toISOString(),
+          metadata: { last_appointment_id: appointment_id },
+        })
+        .eq('id', existing.id)
+      return
+    }
+
+    await supabase.from('professional_crm_contacts').insert({
+      professional_user_id: user.id,
+      patient_id,
+      patient_name: patient_name || null,
+      patient_email: patient_email || null,
+      source: 'telemedicine',
+      lifecycle_stage: 'patient',
+      last_contact_at: new Date().toISOString(),
+      metadata: { last_appointment_id: appointment_id },
+    })
+  }
+
+  async function createCrmTask(item: any, taskType: string, title: string, messageTemplate: string) {
+    if (!user || !professional) return
+
+    try {
+      await supabase.from('professional_crm_tasks').insert({
+        professional_user_id: user.id,
+        appointment_id: item.id,
+        task_type: taskType,
+        title,
+        description: messageTemplate,
+        channel: 'manual',
+        message_template: messageTemplate,
+        status: 'pending',
+        due_at: item.preferred_date && item.preferred_time ? `${item.preferred_date}T${String(item.preferred_time).slice(0, 5)}:00-03:00` : null,
+        metadata: {
+          patient_id: item.patient_id || item.user_id,
+          patient_name: item.patient_name || null,
+          professional_id: professional.id,
+        },
+      })
+    } catch {
+      // CRM ainda pode não ter sido ativado no Supabase. Não trava o fluxo principal.
+    }
+  }
+
   async function updateAppointment(item: any, updates: any, type: string, description: string) {
-    if (!professional) return
+    if (!professional || !user) return
     setSavingId(item.id)
+
+    const payload = {
+      ...updates,
+      professional_id: item.professional_id || professional.id,
+      professional_name: item.professional_name || professional.full_name,
+      professional_email: item.professional_email || professional.email || user.email,
+      updated_at: new Date().toISOString(),
+    }
 
     const { error } = await supabase
       .from('telemedicine_appointments')
-      .update({ ...updates, updated_at: new Date().toISOString() })
+      .update(payload)
       .eq('id', item.id)
 
     if (error) {
@@ -194,7 +301,14 @@ export default function TeleconsultasPage() {
       return
     }
 
-    await logEvent(item.id, type, description, item.patient_id || item.user_id, updates)
+    await logEvent(item.id, type, description, item.patient_id || item.user_id, payload)
+    await upsertCrmContact({
+      patient_id: item.patient_id || item.user_id,
+      patient_name: item.patient_name,
+      patient_email: item.patient_email,
+      appointment_id: item.id,
+    })
+
     toast.success('Teleconsulta atualizada')
     setSavingId(null)
     load()
@@ -206,22 +320,42 @@ export default function TeleconsultasPage() {
     await updateAppointment(
       item,
       {
-        status: 'confirmed',
+        status: 'scheduled',
         room_url: link || null,
         meet_url: link || null,
+        professional_confirmed: true,
+        professional_confirmed_at: new Date().toISOString(),
       },
-      'appointment_confirmed',
-      'Profissional confirmou a teleconsulta.'
+      'appointment_scheduled',
+      'Profissional agendou/confirmou a teleconsulta.'
     )
   }
 
   async function sendReminder(item: any) {
+    const message = buildReminderMessage(item)
+
     await updateAppointment(
       item,
-      { reminder_sent_at: new Date().toISOString() },
+      {
+        status: item.status === 'scheduled' ? 'reminder_sent' : item.status,
+        reminder_sent_at: new Date().toISOString(),
+      },
       'reminder_sent',
       'Lembrete de teleconsulta registrado para envio ao paciente.'
     )
+
+    await createCrmTask(item, 'reminder', 'Enviar lembrete de teleconsulta', message)
+  }
+
+  async function copyReminder(item: any) {
+    const message = buildReminderMessage(item)
+
+    try {
+      await navigator.clipboard.writeText(message)
+      toast.success('Mensagem copiada')
+    } catch {
+      toast.error('Não consegui copiar automaticamente')
+    }
   }
 
   async function startAppointment(item: any) {
@@ -244,9 +378,17 @@ export default function TeleconsultasPage() {
         orientation_text: note.orientation || item.orientation_text || null,
         prescription_text: note.prescription || item.prescription_text || null,
         professional_notes: note.professional || item.professional_notes || null,
+        prescription_sent_at: note.prescription ? new Date().toISOString() : item.prescription_sent_at || null,
       },
       'appointment_completed',
-      'Profissional concluiu a teleconsulta e registrou orientações.',
+      'Profissional concluiu a teleconsulta e registrou orientações.'
+    )
+
+    await createCrmTask(
+      item,
+      'post_consultation',
+      'Follow-up pós-consulta',
+      `Olá, ${item.patient_name || 'paciente'}. Suas orientações da teleconsulta já estão disponíveis no HealthWallet.`
     )
   }
 
@@ -264,7 +406,8 @@ export default function TeleconsultasPage() {
   const stats = useMemo(() => {
     return {
       total: appointments.length,
-      scheduled: appointments.filter((a) => ['scheduled', 'confirmed'].includes(a.status)).length,
+      requested: appointments.filter((a) => a.status === 'requested').length,
+      scheduled: appointments.filter((a) => ['scheduled', 'confirmed', 'reminder_sent'].includes(a.status)).length,
       today: appointments.filter((a) => a.preferred_date === new Date().toISOString().slice(0, 10)).length,
       completed: appointments.filter((a) => a.status === 'completed').length,
     }
@@ -283,7 +426,7 @@ export default function TeleconsultasPage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Teleconsultas</h1>
-          <p className="text-gray-600 mt-1">Agende, confirme, envie lembretes, inicie consultas e registre orientações.</p>
+          <p className="text-gray-600 mt-1">Agenda, dados do paciente, chamada, lembretes, receita e CRM em um só lugar.</p>
         </div>
 
         <button
@@ -295,15 +438,22 @@ export default function TeleconsultasPage() {
         </button>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         <Stat label="Total" value={stats.total} />
+        <Stat label="Solicitadas" value={stats.requested} />
         <Stat label="Agendadas" value={stats.scheduled} />
         <Stat label="Hoje" value={stats.today} />
         <Stat label="Concluídas" value={stats.completed} />
       </div>
 
+      <div className="grid md:grid-cols-3 gap-3">
+        <FeatureStrip icon={Video} title="Meet manual agora" description="Cole um link Google Meet, Daily, Zoom ou WhatsApp." />
+        <FeatureStrip icon={MessageCircle} title="SmartBots CRM" description="Lembretes e follow-up ficam preparados como tarefas." />
+        <FeatureStrip icon={CreditCard} title="NextGen Pix" description="Campos de cobrança e split já estão prontos para a próxima fase." />
+      </div>
+
       <section className="bg-cyan-50 border border-cyan-200 rounded-2xl p-4 text-sm text-cyan-900">
-        <strong>Motor v1:</strong> no primeiro momento, use um link manual do Google Meet, Daily, Zoom ou WhatsApp. A criação automática do Meet entra depois via Google Calendar/Meet API.
+        <strong>Motor v1:</strong> o paciente pode solicitar pelo HealthWallet, você agenda/assume a consulta aqui, cola o link, envia lembrete, inicia e registra receita/orientações.
       </section>
 
       {showForm && (
@@ -346,7 +496,7 @@ export default function TeleconsultasPage() {
           <Input label="Link da chamada" value={form.room_url} onChange={(value: string) => setForm({ ...form, room_url: value })} placeholder="Cole link Google Meet / Daily / Zoom" />
 
           <div>
-            <label className="text-sm font-medium text-gray-700 mb-1 block">Motivo / observações iniciais</label>
+            <label className="text-sm font-medium text-gray-700 mb-1 block">Motivo / observações</label>
             <textarea
               value={form.reason}
               onChange={(e) => setForm({ ...form, reason: e.target.value })}
@@ -382,6 +532,7 @@ export default function TeleconsultasPage() {
                 setNote={(value: any) => setNotes({ ...notes, [item.id]: value })}
                 onConfirm={() => confirmAppointment(item)}
                 onReminder={() => sendReminder(item)}
+                onCopyReminder={() => copyReminder(item)}
                 onStart={() => startAppointment(item)}
                 onComplete={() => completeAppointment(item)}
                 onCancel={() => cancelAppointment(item)}
@@ -396,9 +547,10 @@ export default function TeleconsultasPage() {
   )
 }
 
-function AppointmentCard({ item, saving, roomLink, setRoomLink, note, setNote, onConfirm, onReminder, onStart, onComplete, onCancel }: any) {
+function AppointmentCard({ item, saving, roomLink, setRoomLink, note, setNote, onConfirm, onReminder, onCopyReminder, onStart, onComplete, onCancel }: any) {
   const status = translateStatus(item.status)
-  const joinUrl = item.room_url || item.meet_url
+  const joinUrl = item.room_url || item.meet_url || roomLink
+  const isUnassigned = !item.professional_id
 
   return (
     <div className="border border-gray-100 rounded-2xl p-4 bg-gray-50/60">
@@ -412,6 +564,8 @@ function AppointmentCard({ item, saving, roomLink, setRoomLink, note, setNote, o
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-bold text-gray-900">{item.specialty || 'Teleconsulta'}</h3>
                 <span className="text-xs rounded-full px-2 py-0.5 bg-white border text-gray-600">{status}</span>
+                {isUnassigned && <span className="text-xs rounded-full px-2 py-0.5 bg-yellow-100 text-yellow-700">Nova solicitação</span>}
+                {item.payment_status && item.payment_status !== 'not_required' && <span className="text-xs rounded-full px-2 py-0.5 bg-amber-100 text-amber-700">Pgto: {item.payment_status}</span>}
               </div>
               <p className="text-sm text-gray-600 mt-1 flex items-center gap-1">
                 <CalendarDays className="w-4 h-4" />
@@ -459,16 +613,19 @@ function AppointmentCard({ item, saving, roomLink, setRoomLink, note, setNote, o
 
           <div className="grid grid-cols-2 gap-2">
             <button disabled={saving} onClick={onConfirm} className="ActionButton bg-emerald-600 text-white">
-              <CheckCircle className="w-4 h-4" /> Confirmar
+              <CheckCircle className="w-4 h-4" /> {isUnassigned ? 'Assumir' : 'Confirmar'}
             </button>
             <button disabled={saving} onClick={onReminder} className="ActionButton bg-amber-100 text-amber-800">
               <Bell className="w-4 h-4" /> Lembrete
             </button>
+            <button disabled={saving} onClick={onCopyReminder} className="ActionButton bg-white border border-gray-200 text-gray-700">
+              <Copy className="w-4 h-4" /> Copiar
+            </button>
             <button disabled={saving} onClick={onStart} className="ActionButton bg-cyan-600 text-white">
               <PlayCircle className="w-4 h-4" /> Iniciar
             </button>
-            <button disabled={saving} onClick={onComplete} className="ActionButton bg-blue-600 text-white">
-              <StopCircle className="w-4 h-4" /> Concluir
+            <button disabled={saving} onClick={onComplete} className="ActionButton bg-blue-600 text-white col-span-2">
+              <StopCircle className="w-4 h-4" /> Concluir e enviar orientações
             </button>
           </div>
 
@@ -500,6 +657,20 @@ function Stat({ label, value }: any) {
     <div className="rounded-2xl bg-white border border-gray-100 p-4 shadow-sm">
       <p className="text-2xl font-bold text-emerald-700">{value}</p>
       <p className="text-xs text-gray-500">{label}</p>
+    </div>
+  )
+}
+
+function FeatureStrip({ icon: Icon, title, description }: any) {
+  return (
+    <div className="rounded-2xl bg-white border border-gray-100 p-4 shadow-sm flex items-start gap-3">
+      <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
+        <Icon className="w-5 h-5" />
+      </div>
+      <div>
+        <p className="font-semibold text-gray-900 text-sm">{title}</p>
+        <p className="text-xs text-gray-500 mt-1">{description}</p>
+      </div>
     </div>
   )
 }
@@ -549,11 +720,22 @@ function MiniStatus({ icon: Icon, label, active }: any) {
   )
 }
 
+function buildReminderMessage(item: any) {
+  const date = formatDate(item.preferred_date)
+  const time = item.preferred_time ? String(item.preferred_time).slice(0, 5) : ''
+  const patientName = item.patient_name || 'paciente'
+  const professionalName = item.professional_name || 'profissional'
+  const link = item.room_url || item.meet_url || ''
+
+  return `Olá, ${patientName}. Passando para lembrar da sua teleconsulta com ${professionalName} em ${date}${time ? ` às ${time}` : ''}. Acesse o HealthWallet para confirmar presença, autorizar os dados e entrar na chamada.${link ? ` Link: ${link}` : ''}`
+}
+
 function translateStatus(status: string) {
   const map: Record<string, string> = {
     requested: 'Solicitada',
     scheduled: 'Agendada',
     confirmed: 'Confirmada',
+    reminder_sent: 'Lembrete enviado',
     in_progress: 'Em andamento',
     completed: 'Concluída',
     cancelled: 'Cancelada',

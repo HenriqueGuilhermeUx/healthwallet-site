@@ -71,6 +71,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Documento não encontrado' }, { status: 404 })
     }
 
+    const signerRole = signToken.signer_role || 'professional'
+
     const documentSnapshot = {
       document_id: document.id,
       appointment_id: document.appointment_id,
@@ -83,7 +85,7 @@ export async function POST(req: NextRequest) {
       legal_notice: document.legal_notice,
       created_at: document.created_at,
       signed_at: now,
-      signer_role: signToken.signer_role || 'patient',
+      signer_role: signerRole,
       signer_name: signerName || signToken.patient_name || null,
       signer_email: signerEmail || signToken.patient_email || null,
       signer_cpf_last4: signerCpf.slice(-4),
@@ -106,8 +108,8 @@ export async function POST(req: NextRequest) {
       steps: [
         { type: 'token_created', at: signToken.created_at },
         { type: 'document_viewed', at: signToken.viewed_at || now },
-        { type: 'terms_accepted', at: now },
-        { type: 'signed', at: now },
+        { type: signerRole === 'professional' ? 'professional_terms_accepted' : 'terms_accepted', at: now },
+        { type: signerRole === 'professional' ? 'professional_signed' : 'signed', at: now },
       ],
       ip_address: ipAddress,
       user_agent: userAgent,
@@ -123,7 +125,7 @@ export async function POST(req: NextRequest) {
         professional_user_id: document.professional_user_id || signToken.professional_user_id || null,
         professional_id: document.professional_id || signToken.professional_id || null,
         patient_id: document.patient_id || signToken.patient_id || null,
-        signer_role: signToken.signer_role || 'patient',
+        signer_role: signerRole,
         signer_name: signerName || signToken.patient_name || null,
         signer_email: signerEmail || signToken.patient_email || null,
         signer_cpf: signerCpf,
@@ -163,12 +165,12 @@ export async function POST(req: NextRequest) {
         simple_signature_id: signature.id,
         simple_signature_token_id: signToken.id,
         signature_provider: 'mydatamed_simple',
-        signature_level: 'simple_audit_trail',
+        signature_level: signerRole === 'professional' ? 'professional_simple_audit_trail' : 'patient_acknowledgement_audit_trail',
         signature_validation_url: verificationUrl,
         verification_url: verificationUrl,
         qr_payload: verificationUrl,
         document_hash: documentHash,
-        sent_to_patient_at: now,
+        sent_to_patient_at: signerRole === 'professional' ? now : document.sent_to_patient_at || now,
       })
       .eq('id', document.id)
 
@@ -179,7 +181,7 @@ export async function POST(req: NextRequest) {
           clinical_document_status: 'signed',
           clinical_document_signed_at: now,
           clinical_document_signature_provider: 'mydatamed_simple',
-          clinical_document_signature_level: 'simple_audit_trail',
+          clinical_document_signature_level: signerRole === 'professional' ? 'professional_simple_audit_trail' : 'patient_acknowledgement_audit_trail',
           clinical_document_validation_url: verificationUrl,
           clinical_document_hash: documentHash,
         })
@@ -191,6 +193,7 @@ export async function POST(req: NextRequest) {
       signature_id: signature.id,
       document_hash: documentHash,
       verification_url: verificationUrl,
+      signer_role: signerRole,
     })
   } catch (error: any) {
     return NextResponse.json({ error: error?.message || 'Erro inesperado' }, { status: 500 })

@@ -32,16 +32,48 @@ function isPaidEvent(status?: string | null, eventType?: string | null) {
   return value.includes('paid') || value.includes('completed') || value.includes('confirmed') || value.includes('pix-paid')
 }
 
+function okResponse(extra: Record<string, any> = {}) {
+  return NextResponse.json({ ok: true, service: 'woovi-webhook', ...extra }, { status: 200 })
+}
+
+async function readJsonSafely(req: NextRequest) {
+  const text = await req.text()
+  if (!text || !text.trim()) return null
+
+  try {
+    return JSON.parse(text)
+  } catch {
+    return null
+  }
+}
+
+function isAuthorized(req: NextRequest) {
+  const expectedSecret = process.env.WOOVI_WEBHOOK_SECRET
+  if (!expectedSecret) return true
+
+  const incomingSecret =
+    req.headers.get('x-webhook-secret') ||
+    req.headers.get('x-woovi-secret') ||
+    req.headers.get('x-openpix-secret') ||
+    req.nextUrl.searchParams.get('secret')
+
+  return incomingSecret === expectedSecret
+}
+
 export async function POST(req: NextRequest) {
   try {
-    const expectedSecret = process.env.WOOVI_WEBHOOK_SECRET
-    const incomingSecret = req.headers.get('x-webhook-secret') || req.headers.get('x-woovi-secret') || req.nextUrl.searchParams.get('secret')
-
-    if (expectedSecret && incomingSecret !== expectedSecret) {
+    if (!isAuthorized(req)) {
       return NextResponse.json({ error: 'Webhook não autorizado' }, { status: 401 })
     }
 
-    const payload = await req.json()
+    const payload = await readJsonSafely(req)
+
+    // Alguns provedores fazem validação do webhook com POST vazio.
+    // Nesse caso, precisa responder 200 para permitir o cadastro do endpoint.
+    if (!payload) {
+      return okResponse({ validation: true, received: false })
+    }
+
     const fields = extractWebhookFields(payload)
     const supabase = getSupabaseAdmin()
 
@@ -118,12 +150,26 @@ export async function POST(req: NextRequest) {
         .eq('id', webhookEvent.id)
     }
 
-    return NextResponse.json({ ok: true, processed, error })
+    // Mesmo quando não encontra cobrança local, respondemos 200 para a Woovi não desabilitar o webhook.
+    return okResponse({ processed, error })
   } catch (error: any) {
-    return NextResponse.json({ error: error?.message || 'Erro inesperado' }, { status: 500 })
+    // Nunca derrubar cadastro/entrega do webhook por exceção interna.
+    return okResponse({ processed: false, error: error?.message || 'Erro inesperado' })
   }
 }
 
-export async function GET() {
-  return NextResponse.json({ ok: true, service: 'woovi-webhook' })
+export async function GET(req: NextRequest) {
+  if (!isAuthorized(req)) {
+    return NextResponse.json({ error: 'Webhook não autorizado' }, { status: 401 })
+  }
+
+  return okResponse({ validation: true })
+}
+
+export async function HEAD() {
+  return new Response(null, { status: 200 })
+}
+
+export async function OPTIONS() {
+  return new Response(null, { status: 200 })
 }

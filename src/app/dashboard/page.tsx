@@ -19,6 +19,7 @@ import {
   CalendarDays,
   MessageCircle,
   ReceiptText,
+  Wallet,
 } from 'lucide-react'
 
 interface AccessCode {
@@ -160,12 +161,19 @@ export default function DashboardPage() {
         <p className="text-gray-600 mt-1">Acesse pacientes, teleconsultas, documentos profissionais e dados autorizados</p>
       </div>
 
-      <div className="grid md:grid-cols-3 gap-4 mb-8">
+      <div className="grid md:grid-cols-4 gap-4 mb-8">
         <Link href="/teleconsultas" className="bg-gradient-to-br from-cyan-600 to-blue-700 text-white rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
           <Video className="w-8 h-8 mb-3" />
           <h2 className="font-bold text-lg">Teleconsultas</h2>
           <p className="text-sm text-white/80 mt-1">Agendar, assumir solicitações, iniciar, lembrar, concluir e registrar orientações.</p>
           <span className="inline-flex items-center gap-1 mt-4 text-sm font-semibold">Abrir agenda <ArrowRight className="w-4 h-4" /></span>
+        </Link>
+
+        <Link href="/pro" className="bg-gradient-to-br from-slate-900 to-emerald-900 text-white rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
+          <Wallet className="w-8 h-8 mb-3" />
+          <h2 className="font-bold text-lg">Modo Pro</h2>
+          <p className="text-sm text-white/80 mt-1">15 dias grátis, Pix Woovi, CRM/Bots, agenda e área comercial.</p>
+          <span className="inline-flex items-center gap-1 mt-4 text-sm font-semibold">Ativar Pro <ArrowRight className="w-4 h-4" /></span>
         </Link>
 
         <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
@@ -184,7 +192,7 @@ export default function DashboardPage() {
       <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-8 flex items-start gap-3">
         <ReceiptText className="w-5 h-5 text-emerald-700 mt-0.5" />
         <p className="text-sm text-emerald-900">
-          O módulo profissional evolui para plano pago com teleconsulta, agenda, CRM, pagamentos Pix e documentos profissionais. Receitas/prescrições ficam condicionadas à habilitação do profissional e à assinatura/validação adequada.
+          O acesso a dados autorizados dos pacientes é gratuito. O Modo Pro libera a área comercial: teleconsulta, agenda, CRM/Bots, pagamentos Pix Woovi/NextGen e documentos profissionais.
         </p>
       </div>
 

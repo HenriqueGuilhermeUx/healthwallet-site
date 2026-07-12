@@ -62,16 +62,17 @@ function isAuthorized(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   try {
-    if (!isAuthorized(req)) {
-      return NextResponse.json({ error: 'Webhook não autorizado' }, { status: 401 })
-    }
-
     const payload = await readJsonSafely(req)
 
-    // Alguns provedores fazem validação do webhook com POST vazio.
-    // Nesse caso, precisa responder 200 para permitir o cadastro do endpoint.
+    // Validação/cadastro de webhook pode chegar como POST vazio.
+    // Responde 200 mesmo sem secret para a Woovi aceitar o endpoint.
     if (!payload) {
       return okResponse({ validation: true, received: false })
+    }
+
+    // Eventos reais com payload ainda respeitam o secret quando configurado.
+    if (!isAuthorized(req)) {
+      return NextResponse.json({ error: 'Webhook não autorizado' }, { status: 401 })
     }
 
     const fields = extractWebhookFields(payload)
@@ -150,19 +151,13 @@ export async function POST(req: NextRequest) {
         .eq('id', webhookEvent.id)
     }
 
-    // Mesmo quando não encontra cobrança local, respondemos 200 para a Woovi não desabilitar o webhook.
     return okResponse({ processed, error })
   } catch (error: any) {
-    // Nunca derrubar cadastro/entrega do webhook por exceção interna.
     return okResponse({ processed: false, error: error?.message || 'Erro inesperado' })
   }
 }
 
-export async function GET(req: NextRequest) {
-  if (!isAuthorized(req)) {
-    return NextResponse.json({ error: 'Webhook não autorizado' }, { status: 401 })
-  }
-
+export async function GET() {
   return okResponse({ validation: true })
 }
 

@@ -7,28 +7,23 @@ import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import {
-  CalendarDays,
-  Video,
-  Loader2,
-  Plus,
-  CheckCircle,
-  XCircle,
-  ExternalLink,
-  Clock,
   Bell,
-  PlayCircle,
-  StopCircle,
-  FileText,
-  Send,
-  ShieldCheck,
-  User,
-  Mail,
+  CalendarDays,
+  CheckCircle,
   Copy,
-  CreditCard,
+  ExternalLink,
+  FileText,
+  Loader2,
+  Mail,
   MessageCircle,
-  ReceiptText,
+  PlayCircle,
+  Plus,
+  ShieldCheck,
   Sparkles,
-  Wallet,
+  StopCircle,
+  User,
+  Video,
+  XCircle,
 } from 'lucide-react'
 
 const DEFAULT_PERMISSIONS = {
@@ -41,7 +36,7 @@ const DEFAULT_PERMISSIONS = {
 }
 
 export default function TeleconsultasPage() {
-  const { user, professional, loading: authLoading } = useAuth()
+  const { user, session, professional, loading: authLoading } = useAuth()
   const router = useRouter()
   const [appointments, setAppointments] = useState<any[]>([])
   const [recentPatients, setRecentPatients] = useState<any[]>([])
@@ -128,81 +123,6 @@ export default function TeleconsultasPage() {
     setRecentPatients(Array.from(unique.values()))
   }
 
-  async function createAppointment() {
-    if (!professional || !user) return
-
-    if (!form.patient_id || !form.preferred_date || !form.preferred_time) {
-      toast.error('Informe paciente, data e horário')
-      return
-    }
-
-    const scheduledAt = `${form.preferred_date}T${form.preferred_time}:00-03:00`
-    const now = new Date().toISOString()
-    const payload = {
-      user_id: form.patient_id,
-      patient_id: form.patient_id,
-      patient_name: form.patient_name || null,
-      patient_email: form.patient_email || null,
-      professional_id: professional.id,
-      professional_name: professional.full_name,
-      professional_email: professional.email || user.email,
-      specialty: form.specialty || professional.specialty || 'Clínica geral',
-      reason: form.reason || null,
-      preferred_date: form.preferred_date,
-      preferred_time: form.preferred_time,
-      scheduled_at: scheduledAt,
-      duration_minutes: Number(form.duration_minutes || 30),
-      status: 'scheduled',
-      provider: 'manual_link',
-      room_url: form.room_url || null,
-      meet_url: form.room_url || null,
-      professional_confirmed: true,
-      professional_confirmed_at: now,
-      shared_data_permissions: DEFAULT_PERMISSIONS,
-      payment_status: 'not_required',
-      created_at: now,
-      updated_at: now,
-    }
-
-    const { data, error } = await supabase
-      .from('telemedicine_appointments')
-      .insert(payload)
-      .select()
-      .single()
-
-    if (error) {
-      toast.error(error.message || 'Erro ao agendar teleconsulta')
-      return
-    }
-
-    await logEvent(data.id, 'appointment_scheduled', 'Profissional agendou teleconsulta.', data.patient_id, {
-      scheduled_at: scheduledAt,
-      room_url: form.room_url || null,
-    })
-
-    await upsertCrmContact({
-      patient_id: form.patient_id,
-      patient_name: form.patient_name,
-      patient_email: form.patient_email,
-      appointment_id: data.id,
-    })
-
-    toast.success('Teleconsulta agendada')
-    setShowForm(false)
-    setForm({
-      patient_id: '',
-      patient_name: '',
-      patient_email: '',
-      specialty: professional?.specialty || 'Clínica geral',
-      reason: '',
-      preferred_date: '',
-      preferred_time: '',
-      duration_minutes: '30',
-      room_url: '',
-    })
-    load()
-  }
-
   async function logEvent(appointmentId: string, type: string, description: string, patientId?: string, metadata: any = {}) {
     if (!professional || !user) return
 
@@ -253,6 +173,81 @@ export default function TeleconsultasPage() {
     })
   }
 
+  async function createAppointment() {
+    if (!professional || !user) return
+
+    if (!form.patient_id || !form.preferred_date || !form.preferred_time) {
+      toast.error('Informe paciente, data e horário')
+      return
+    }
+
+    const scheduledAt = `${form.preferred_date}T${form.preferred_time}:00-03:00`
+    const now = new Date().toISOString()
+    const payload = {
+      user_id: form.patient_id,
+      patient_id: form.patient_id,
+      patient_name: form.patient_name || null,
+      patient_email: form.patient_email || null,
+      professional_id: professional.id,
+      professional_name: professional.full_name,
+      professional_email: user.email,
+      specialty: form.specialty || professional.specialty || 'Clínica geral',
+      reason: form.reason || null,
+      preferred_date: form.preferred_date,
+      preferred_time: form.preferred_time,
+      scheduled_at: scheduledAt,
+      duration_minutes: Number(form.duration_minutes || 30),
+      status: 'scheduled',
+      provider: form.room_url ? 'manual_link' : 'pending_daily',
+      room_url: form.room_url || null,
+      meet_url: form.room_url || null,
+      professional_confirmed: true,
+      professional_confirmed_at: now,
+      shared_data_permissions: DEFAULT_PERMISSIONS,
+      payment_status: 'not_required',
+      created_at: now,
+      updated_at: now,
+    }
+
+    const { data, error } = await supabase
+      .from('telemedicine_appointments')
+      .insert(payload)
+      .select()
+      .single()
+
+    if (error) {
+      toast.error(error.message || 'Erro ao agendar teleconsulta')
+      return
+    }
+
+    await logEvent(data.id, 'appointment_scheduled', 'Profissional agendou teleconsulta.', data.patient_id, {
+      scheduled_at: scheduledAt,
+      room_url: form.room_url || null,
+    })
+
+    await upsertCrmContact({
+      patient_id: form.patient_id,
+      patient_name: form.patient_name,
+      patient_email: form.patient_email,
+      appointment_id: data.id,
+    })
+
+    toast.success('Teleconsulta agendada')
+    setShowForm(false)
+    setForm({
+      patient_id: '',
+      patient_name: '',
+      patient_email: '',
+      specialty: professional?.specialty || 'Clínica geral',
+      reason: '',
+      preferred_date: '',
+      preferred_time: '',
+      duration_minutes: '30',
+      room_url: '',
+    })
+    load()
+  }
+
   async function createCrmTask(item: any, taskType: string, title: string, messageTemplate: string) {
     if (!user || !professional) return
 
@@ -286,7 +281,7 @@ export default function TeleconsultasPage() {
       ...updates,
       professional_id: item.professional_id || professional.id,
       professional_name: item.professional_name || professional.full_name,
-      professional_email: item.professional_email || professional.email || user.email,
+      professional_email: item.professional_email || user.email,
       updated_at: new Date().toISOString(),
     }
 
@@ -321,6 +316,7 @@ export default function TeleconsultasPage() {
       item,
       {
         status: 'scheduled',
+        provider: link ? 'manual_link' : item.provider || 'manual_link',
         room_url: link || null,
         meet_url: link || null,
         professional_confirmed: true,
@@ -329,6 +325,37 @@ export default function TeleconsultasPage() {
       'appointment_scheduled',
       'Profissional agendou/confirmou a teleconsulta.'
     )
+  }
+
+  async function createDailyRoom(item: any) {
+    if (!session?.access_token) {
+      toast.error('Sessão expirada. Entre novamente.')
+      return
+    }
+
+    setSavingId(item.id)
+
+    const response = await fetch('/api/video/daily/create-room', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify({ appointment_id: item.id }),
+    })
+
+    const payload = await response.json()
+
+    if (!response.ok) {
+      toast.error(payload.error || 'Erro ao criar sala Daily')
+      setSavingId(null)
+      return
+    }
+
+    setRoomLinks({ ...roomLinks, [item.id]: payload.room_url })
+    toast.success('Sala Daily criada')
+    setSavingId(null)
+    load()
   }
 
   async function sendReminder(item: any) {
@@ -408,7 +435,7 @@ export default function TeleconsultasPage() {
       total: appointments.length,
       requested: appointments.filter((a) => a.status === 'requested').length,
       scheduled: appointments.filter((a) => ['scheduled', 'confirmed', 'reminder_sent'].includes(a.status)).length,
-      today: appointments.filter((a) => a.preferred_date === new Date().toISOString().slice(0, 10)).length,
+      daily: appointments.filter((a) => a.provider === 'daily').length,
       completed: appointments.filter((a) => a.status === 'completed').length,
     }
   }, [appointments])
@@ -426,7 +453,7 @@ export default function TeleconsultasPage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Teleconsultas</h1>
-          <p className="text-gray-600 mt-1">Agenda, dados do paciente, chamada, lembretes, receita e CRM em um só lugar.</p>
+          <p className="text-gray-600 mt-1">Daily premium, link manual, dados autorizados, lembretes, receita e CRM em um só lugar.</p>
         </div>
 
         <button
@@ -442,18 +469,18 @@ export default function TeleconsultasPage() {
         <Stat label="Total" value={stats.total} />
         <Stat label="Solicitadas" value={stats.requested} />
         <Stat label="Agendadas" value={stats.scheduled} />
-        <Stat label="Hoje" value={stats.today} />
+        <Stat label="Daily" value={stats.daily} />
         <Stat label="Concluídas" value={stats.completed} />
       </div>
 
       <div className="grid md:grid-cols-3 gap-3">
-        <FeatureStrip icon={Video} title="Meet manual agora" description="Cole um link Google Meet, Daily, Zoom ou WhatsApp." />
+        <FeatureStrip icon={Sparkles} title="Daily premium" description="Gere uma sala privada direto no MyDataMed Pro." />
+        <FeatureStrip icon={Video} title="Fallback manual" description="Cole Google Meet, Zoom, Daily ou WhatsApp quando preferir." />
         <FeatureStrip icon={MessageCircle} title="SmartBots CRM" description="Lembretes e follow-up ficam preparados como tarefas." />
-        <FeatureStrip icon={CreditCard} title="NextGen Pix" description="Campos de cobrança e split já estão prontos para a próxima fase." />
       </div>
 
       <section className="bg-cyan-50 border border-cyan-200 rounded-2xl p-4 text-sm text-cyan-900">
-        <strong>Motor v1:</strong> o paciente pode solicitar pelo HealthWallet, você agenda/assume a consulta aqui, cola o link, envia lembrete, inicia e registra receita/orientações.
+        <strong>Modo Pro:</strong> o profissional pode criar uma sala Daily com 1 clique. Link manual continua como fallback para Google Meet, Zoom ou WhatsApp.
       </section>
 
       {showForm && (
@@ -493,7 +520,7 @@ export default function TeleconsultasPage() {
             <Input label="Duração min." value={form.duration_minutes} onChange={(value: string) => setForm({ ...form, duration_minutes: value })} />
           </div>
 
-          <Input label="Link da chamada" value={form.room_url} onChange={(value: string) => setForm({ ...form, room_url: value })} placeholder="Cole link Google Meet / Daily / Zoom" />
+          <Input label="Link manual opcional" value={form.room_url} onChange={(value: string) => setForm({ ...form, room_url: value })} placeholder="Cole Google Meet / Zoom / Daily ou deixe vazio para gerar Daily depois" />
 
           <div>
             <label className="text-sm font-medium text-gray-700 mb-1 block">Motivo / observações</label>
@@ -531,6 +558,7 @@ export default function TeleconsultasPage() {
                 note={notes[item.id] || { orientation: item.orientation_text || '', prescription: item.prescription_text || '', professional: item.professional_notes || '' }}
                 setNote={(value: any) => setNotes({ ...notes, [item.id]: value })}
                 onConfirm={() => confirmAppointment(item)}
+                onCreateDaily={() => createDailyRoom(item)}
                 onReminder={() => sendReminder(item)}
                 onCopyReminder={() => copyReminder(item)}
                 onStart={() => startAppointment(item)}
@@ -547,23 +575,25 @@ export default function TeleconsultasPage() {
   )
 }
 
-function AppointmentCard({ item, saving, roomLink, setRoomLink, note, setNote, onConfirm, onReminder, onCopyReminder, onStart, onComplete, onCancel }: any) {
+function AppointmentCard({ item, saving, roomLink, setRoomLink, note, setNote, onConfirm, onCreateDaily, onReminder, onCopyReminder, onStart, onComplete, onCancel }: any) {
   const status = translateStatus(item.status)
   const joinUrl = item.room_url || item.meet_url || roomLink
   const isUnassigned = !item.professional_id
+  const isDaily = item.provider === 'daily' || String(joinUrl || '').includes('daily.co')
 
   return (
     <div className="border border-gray-100 rounded-2xl p-4 bg-gray-50/60">
       <div className="flex flex-col lg:flex-row lg:items-start gap-4">
         <div className="flex-1">
           <div className="flex items-start gap-3">
-            <div className="w-11 h-11 rounded-xl bg-cyan-100 flex items-center justify-center flex-shrink-0">
-              <Video className="w-5 h-5 text-cyan-700" />
+            <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${isDaily ? 'bg-emerald-100' : 'bg-cyan-100'}`}>
+              <Video className={`w-5 h-5 ${isDaily ? 'text-emerald-700' : 'text-cyan-700'}`} />
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-2">
                 <h3 className="font-bold text-gray-900">{item.specialty || 'Teleconsulta'}</h3>
                 <span className="text-xs rounded-full px-2 py-0.5 bg-white border text-gray-600">{status}</span>
+                {isDaily && <span className="text-xs rounded-full px-2 py-0.5 bg-emerald-100 text-emerald-700">Daily premium</span>}
                 {isUnassigned && <span className="text-xs rounded-full px-2 py-0.5 bg-yellow-100 text-yellow-700">Nova solicitação</span>}
                 {item.payment_status && item.payment_status !== 'not_required' && <span className="text-xs rounded-full px-2 py-0.5 bg-amber-100 text-amber-700">Pgto: {item.payment_status}</span>}
               </div>
@@ -612,8 +642,11 @@ function AppointmentCard({ item, saving, roomLink, setRoomLink, note, setNote, o
           />
 
           <div className="grid grid-cols-2 gap-2">
-            <button disabled={saving} onClick={onConfirm} className="ActionButton bg-emerald-600 text-white">
-              <CheckCircle className="w-4 h-4" /> {isUnassigned ? 'Assumir' : 'Confirmar'}
+            <button disabled={saving} onClick={onCreateDaily} className="ActionButton bg-emerald-600 text-white col-span-2">
+              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />} Gerar sala Daily premium
+            </button>
+            <button disabled={saving} onClick={onConfirm} className="ActionButton bg-slate-900 text-white">
+              <CheckCircle className="w-4 h-4" /> {isUnassigned ? 'Assumir' : 'Salvar link'}
             </button>
             <button disabled={saving} onClick={onReminder} className="ActionButton bg-amber-100 text-amber-800">
               <Bell className="w-4 h-4" /> Lembrete
@@ -630,7 +663,7 @@ function AppointmentCard({ item, saving, roomLink, setRoomLink, note, setNote, o
           </div>
 
           {joinUrl && (
-            <a href={joinUrl} target="_blank" rel="noreferrer" className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-slate-900 text-white py-2 text-sm font-medium">
+            <a href={joinUrl} target="_blank" rel="noreferrer" className="w-full inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-700 text-white py-2 text-sm font-medium">
               <ExternalLink className="w-4 h-4" />
               Abrir chamada
             </a>

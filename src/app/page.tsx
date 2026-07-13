@@ -5,28 +5,24 @@ import { useRouter } from 'next/navigation'
 import { useEffect } from 'react'
 import Link from 'next/link'
 import {
-  Shield,
-  Clock,
-  FileText,
-  Users,
   ArrowRight,
-  Stethoscope,
-  HeartPulse,
-  Lock,
-  Video,
-  CalendarDays,
-  MessageCircle,
-  CreditCard,
-  PenLine,
-  BadgeCheck,
-  QrCode,
-  CheckCircle,
   Bot,
-  Wallet,
-  Sparkles,
   Building2,
+  CalendarDays,
+  CheckCircle,
+  CreditCard,
+  FileText,
   Gift,
-  ClipboardCheck,
+  HeartPulse,
+  Landmark,
+  MessageCircle,
+  PenLine,
+  Shield,
+  Sparkles,
+  Stethoscope,
+  Users,
+  Video,
+  Wallet,
 } from 'lucide-react'
 
 export default function Home() {
@@ -60,11 +56,12 @@ export default function Home() {
           </div>
         </div>
 
-        <nav className="hidden md:flex items-center gap-6 text-sm text-gray-600">
+        <nav className="hidden lg:flex items-center gap-6 text-sm text-gray-600">
           <a href="#healthwallet" className="hover:text-emerald-700">HealthWallet</a>
           <a href="#mydatamed" className="hover:text-emerald-700">MyDataMed</a>
+          <Link href="/tour" className="hover:text-emerald-700">Tour</Link>
+          <Link href="/prefeituras" className="hover:text-emerald-700">Prefeituras</Link>
           <a href="#planos" className="hover:text-emerald-700">Planos</a>
-          <a href="#tecnologia" className="hover:text-emerald-700">Tecnologia</a>
         </nav>
 
         <div className="flex gap-2">
@@ -81,7 +78,7 @@ export default function Home() {
           <div>
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 rounded-full text-emerald-100 text-sm font-medium mb-6">
               <Sparkles className="w-4 h-4" />
-              Plataforma de saúde digital para pacientes, famílias e profissionais
+              Plataforma de saúde digital para pacientes, famílias, profissionais, clínicas e saúde pública
             </div>
 
             <h1 className="text-4xl md:text-6xl font-bold leading-tight mb-5">
@@ -89,7 +86,7 @@ export default function Home() {
             </h1>
 
             <p className="text-lg md:text-xl text-white/75 max-w-3xl mb-8">
-              Um ecossistema simples: pessoas e famílias organizam saúde no HealthWallet; profissionais acessam dados autorizados gratuitamente e, quando quiserem vender melhor, usam o MyDataMed Pro com teleconsulta, CRM, bots, documentos e pagamentos.
+              Um ecossistema simples: pessoas e famílias organizam saúde no HealthWallet; profissionais acessam dados autorizados gratuitamente e, quando quiserem operar atendimento comercial, usam o MyDataMed Pro com teleconsulta, CRM, bots, documentos e pagamentos.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3">
@@ -97,9 +94,12 @@ export default function Home() {
                 Começar grátis como profissional
                 <ArrowRight className="w-5 h-5" />
               </Link>
-              <a href="#planos" className="inline-flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-white/10 border border-white/15 text-white font-semibold hover:bg-white/15">
-                Ver modelo comercial
-              </a>
+              <Link href="/tour" className="inline-flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-white/10 border border-white/15 text-white font-semibold hover:bg-white/15">
+                Ver tour por público
+              </Link>
+              <Link href="/prefeituras" className="inline-flex items-center justify-center gap-2 px-6 py-4 rounded-xl bg-white/10 border border-white/15 text-white font-semibold hover:bg-white/15">
+                Uso para prefeituras
+              </Link>
             </div>
 
             <div className="grid grid-cols-3 gap-3 mt-8 max-w-2xl">
@@ -127,13 +127,20 @@ export default function Home() {
               </div>
 
               <div className="space-y-2">
-                <CockpitRow icon={Video} title="Teleconsulta 15:30" text="Paciente confirmou e autorizou dados" />
+                <CockpitRow icon={Video} title="Teleconsulta Daily" text="Chamada embutida no MyDataMed" />
                 <CockpitRow icon={Bot} title="SmartBots CRM" text="3 follow-ups prontos para enviar" />
                 <CockpitRow icon={Wallet} title="NextGen Pix" text="Pagamento confirmado e repasse pendente" />
               </div>
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="grid md:grid-cols-4 gap-4 mb-16">
+        <AudienceCard icon={Stethoscope} title="Profissionais" text="Dados autorizados, teleconsulta, documentos e CRM para saúde em geral." href="/tour#profissionais" />
+        <AudienceCard icon={HeartPulse} title="Médicos" text="Snapshot clínico, exames, timeline, documentos e follow-up." href="/tour#medicos" />
+        <AudienceCard icon={Building2} title="Clínicas" text="Operação comercial com agenda, CRM, teleconsulta e pagamentos." href="/tour#clinicas" />
+        <AudienceCard icon={Landmark} title="Prefeituras" text="Camada digital de cuidado cidadão, família, UBS e campanhas." href="/prefeituras" />
       </section>
 
       <section id="healthwallet" className="mb-16">
@@ -191,11 +198,10 @@ export default function Home() {
             price="R$ 79,90/mês"
             description="Para profissionais que querem usar a área comercial e atender com agenda, CRM, bots e pagamentos."
             items={[
-              'Agenda e teleconsulta',
-              'Google Meet/Calendar em implantação',
+              'Agenda e teleconsulta Daily embutida',
+              'Fallback por Google Meet, Zoom ou link manual',
               'CRM SmartBots para lembretes, retornos e follow-up',
               'Pagamentos Pix NextGen/Woovi com confirmação',
-              'Split/repasse e comissão da plataforma em evolução',
               'Documentos profissionais assinados pelo emissor',
               'Receitas/prescrições quando habilitado e com validação aplicável',
             ]}
@@ -207,15 +213,15 @@ export default function Home() {
 
       <section id="tecnologia" className="mb-16 bg-gradient-to-br from-gray-50 to-emerald-50 rounded-[2rem] p-8 md:p-12">
         <div className="text-center max-w-3xl mx-auto mb-10">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">Como a máquina comercial vai funcionar</h2>
+          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">Como a máquina comercial funciona</h2>
           <p className="text-gray-600">
-            O MVP já roda com link manual de chamada. A próxima camada conecta Google Calendar/Meet, CRM SmartBots e pagamentos NextGen/Woovi sem mudar a experiência do usuário.
+            A camada Pro conecta teleconsulta embutida, CRM SmartBots, pagamentos NextGen/Woovi, documentos e acompanhamento sem tirar o acesso gratuito aos dados autorizados.
           </p>
         </div>
 
         <div className="grid md:grid-cols-4 gap-4">
-          <TechStep icon={CalendarDays} title="Agenda + Meet" text="Cria evento, link da chamada, convidados, lembretes e sincronização com a agenda do profissional." />
-          <TechStep icon={Bot} title="SmartBots CRM" text="Lembretes de consulta, confirmação, pós-consulta, retorno, mensagens e reativação de pacientes." />
+          <TechStep icon={Video} title="Teleconsulta Daily" text="Chamada embutida dentro do MyDataMed com fallback por link manual." />
+          <TechStep icon={Bot} title="SmartBots CRM" text="Lembretes de consulta, confirmação, pós-consulta, retorno e reativação." />
           <TechStep icon={Wallet} title="NextGen Pix" text="Cobrança Pix, confirmação de pagamento, status da consulta, comissão e repasse." />
           <TechStep icon={PenLine} title="Documentos" text="Orientações, relatórios e documentos assinados pelo profissional com hash e validação pública." />
         </div>
@@ -225,28 +231,32 @@ export default function Home() {
         <div className="grid md:grid-cols-[1fr_0.9fr] gap-8 items-center">
           <div>
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-blue-50 rounded-full text-blue-700 text-sm font-medium mb-4">
-              <Video className="w-4 h-4" />
-              Teleconsulta
+              <Landmark className="w-4 h-4" />
+              Saúde pública e instituições
             </div>
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Link manual agora. Google Meet/Calendar como evolução principal.</h2>
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Também faz sentido para prefeituras e secretarias.</h2>
             <p className="text-gray-600 mb-5">
-              Hoje o profissional cola o link da chamada e o fluxo já funciona. A versão seguinte conecta a conta Google do profissional para criar evento, convidados, lembretes e link de Meet automaticamente.
+              O ecossistema pode funcionar como camada digital de cuidado cidadão: HealthWallet para pessoas e famílias, MyDataMed para equipes, profissionais, clínicas parceiras, programas de saúde e acompanhamento remoto.
             </p>
             <div className="space-y-3">
-              <Check text="MVP atual: Google Meet/Zoom/Daily por link manual" />
-              <Check text="Fase Google: OAuth + Calendar API + evento com convidados e lembretes" />
-              <Check text="Fase pagamento: consulta só confirma após Pix pago, se o profissional ativar cobrança" />
+              <Check text="Carteira de saúde digital para cidadãos, idosos, famílias e dependentes" />
+              <Check text="Compartilhamento autorizado com profissionais e equipes" />
+              <Check text="Campanhas, lembretes, teleorientação e acompanhamento de grupos prioritários" />
             </div>
+            <Link href="/prefeituras" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-emerald-600 text-white px-5 py-3 font-semibold hover:bg-emerald-700">
+              Ver página institucional
+              <ArrowRight className="w-5 h-5" />
+            </Link>
           </div>
 
           <div className="rounded-3xl bg-slate-950 text-white p-6">
-            <p className="text-sm text-emerald-200 mb-3">Fluxo Pro</p>
+            <p className="text-sm text-emerald-200 mb-3">Fluxo institucional</p>
             <div className="space-y-3">
-              <FlowItem number="1" text="Profissional agenda consulta" />
-              <FlowItem number="2" text="Sistema gera link ou evento Google" />
-              <FlowItem number="3" text="Paciente confirma e autoriza dados" />
-              <FlowItem number="4" text="Pix opcional confirma pagamento" />
-              <FlowItem number="5" text="SmartBots envia lembrete e follow-up" />
+              <FlowItem number="1" text="Cidadão organiza dados no HealthWallet" />
+              <FlowItem number="2" text="Família/cuidador acompanha quando necessário" />
+              <FlowItem number="3" text="Equipe acessa dados autorizados" />
+              <FlowItem number="4" text="Município cria programas e campanhas" />
+              <FlowItem number="5" text="Cuidado fica contínuo, não isolado" />
             </div>
           </div>
         </div>
@@ -260,7 +270,7 @@ export default function Home() {
           </div>
           <h2 className="text-3xl md:text-4xl font-bold mb-3">Grátis para acessar dados. Pago para operar atendimento comercial.</h2>
           <p className="text-white/70">
-            Isso remove atrito para profissionais entrarem e cria receita quando eles usam teleconsulta, CRM, pagamentos e documentos como ferramenta de trabalho.
+            Isso remove atrito para profissionais entrarem e cria receita quando usam teleconsulta, CRM, pagamentos e documentos como ferramenta de trabalho.
           </p>
         </div>
 
@@ -272,14 +282,19 @@ export default function Home() {
       </section>
 
       <section className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-gray-900 mb-3">Pronto para conectar pacientes e profissionais?</h2>
+        <h2 className="text-3xl font-bold text-gray-900 mb-3">Pronto para conectar pacientes, profissionais e instituições?</h2>
         <p className="text-gray-600 max-w-2xl mx-auto mb-6">
-          Comece grátis. Acesse dados autorizados sem cobrança. Ative o Pro quando quiser usar a área comercial.
+          Comece grátis. Acesse dados autorizados sem cobrança. Ative o Pro quando quiser usar a área comercial ou apresente a solução para clínicas e secretarias.
         </p>
-        <Link href="/register" className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-emerald-600 text-white font-semibold rounded-xl hover:bg-emerald-700">
-          Criar conta profissional
-          <ArrowRight className="w-5 h-5" />
-        </Link>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <Link href="/register" className="inline-flex items-center justify-center gap-2 px-8 py-4 bg-emerald-600 text-white font-semibold rounded-xl hover:bg-emerald-700">
+            Criar conta profissional
+            <ArrowRight className="w-5 h-5" />
+          </Link>
+          <Link href="/tour" className="inline-flex items-center justify-center gap-2 px-8 py-4 border border-gray-200 text-gray-700 font-semibold rounded-xl hover:bg-gray-50">
+            Ver tour comercial
+          </Link>
+        </div>
       </section>
     </div>
   )
@@ -314,6 +329,21 @@ function CockpitRow({ icon: Icon, title, text }: any) {
         <p className="text-xs text-gray-500">{text}</p>
       </div>
     </div>
+  )
+}
+
+function AudienceCard({ icon: Icon, title, text, href }: any) {
+  return (
+    <Link href={href} className="rounded-3xl bg-white border border-gray-100 shadow-sm p-5 hover:shadow-md transition-shadow">
+      <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center mb-4">
+        <Icon className="w-5 h-5" />
+      </div>
+      <h3 className="font-bold text-gray-900 mb-1">{title}</h3>
+      <p className="text-sm text-gray-600 leading-relaxed">{text}</p>
+      <span className="inline-flex items-center gap-1 text-sm text-emerald-700 font-semibold mt-4">
+        Ver tour <ArrowRight className="w-4 h-4" />
+      </span>
+    </Link>
   )
 }
 

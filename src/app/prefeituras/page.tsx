@@ -61,9 +61,9 @@ export default function PrefeiturasPage() {
           </div>
         </Link>
         <div className="flex gap-2">
+          <Link href="/proposta-municipal" className="hidden sm:inline-flex px-4 py-2 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-700">Proposta</Link>
           <Link href="/sus-cns" className="hidden sm:inline-flex px-4 py-2 rounded-xl border border-gray-200 text-gray-700 font-medium hover:bg-gray-50">CNS/SUS</Link>
-          <Link href="/tour" className="hidden sm:inline-flex px-4 py-2 rounded-xl border border-gray-200 text-gray-700 font-medium hover:bg-gray-50">Ver tour completo</Link>
-          <Link href="/register" className="px-4 py-2 rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-700">Criar conta</Link>
+          <Link href="/tour" className="hidden sm:inline-flex px-4 py-2 rounded-xl border border-gray-200 text-gray-700 font-medium hover:bg-gray-50">Tour</Link>
         </div>
       </header>
 
@@ -81,9 +81,9 @@ export default function PrefeiturasPage() {
               O HealthWallet organiza dados pessoais, familiares, CPF, CNS/Cartão SUS e Passport. O MyDataMed permite que profissionais, equipes, clínicas parceiras e programas públicos acessem informações autorizadas, façam teleatendimento, acompanhem retornos e mantenham cuidado contínuo.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 mt-8">
-              <a href="#piloto" className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-6 py-4 font-semibold text-white hover:bg-emerald-600">
-                Desenhar piloto municipal <ArrowRight className="w-5 h-5" />
-              </a>
+              <Link href="/proposta-municipal" className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-6 py-4 font-semibold text-white hover:bg-emerald-600">
+                Abrir proposta de piloto <ArrowRight className="w-5 h-5" />
+              </Link>
               <Link href="/sus-cns" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 border border-white/15 px-6 py-4 font-semibold text-white hover:bg-white/15">Ver CNS / SUS</Link>
               <Link href="/tour#prefeituras" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 border border-white/15 px-6 py-4 font-semibold text-white hover:bg-white/15">Ver tour para secretarias</Link>
             </div>
@@ -169,11 +169,13 @@ export default function PrefeiturasPage() {
       </section>
 
       <section className="rounded-[2rem] bg-white border border-gray-100 shadow-sm p-8 md:p-12 text-center">
-        <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center mx-auto mb-4"><CalendarDays className="w-7 h-7" /></div>
+        <div className="w-14 h-14 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center mx-auto mb-4">
+          <CalendarDays className="w-7 h-7" />
+        </div>
         <h2 className="text-3xl md:text-4xl font-bold text-gray-900">Próximo passo: piloto institucional.</h2>
         <p className="text-gray-600 max-w-3xl mx-auto mt-3">A apresentação ideal para prefeitura é objetiva: problema, solução, CNS complementar, piloto, módulos, segurança, benefícios ao cidadão e expansão por fases.</p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center mt-8">
-          <Link href="/tour" className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white px-6 py-4 font-semibold hover:bg-emerald-700">Ver tour completo <ArrowRight className="w-5 h-5" /></Link>
+          <Link href="/proposta-municipal" className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 text-white px-6 py-4 font-semibold hover:bg-emerald-700">Abrir proposta municipal <ArrowRight className="w-5 h-5" /></Link>
           <Link href="/sus-cns" className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 text-gray-700 px-6 py-4 font-semibold hover:bg-gray-50">Ver CNS / SUS</Link>
         </div>
       </section>

@@ -3,12 +3,10 @@
 import Link from 'next/link'
 import {
   ArrowRight,
-  Building2,
   CheckCircle,
   CreditCard,
   HeartPulse,
   Landmark,
-  ShieldCheck,
   Stethoscope,
   Users,
 } from 'lucide-react'

@@ -34,9 +34,12 @@ export default function SusCnsPage() {
             O HealthWallet permite cadastrar CPF, CNS/Cartão SUS, UBS de referência e município. O MyDataMed usa esse vínculo como camada operacional complementar, sempre com acesso autorizado e respeito à privacidade.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 mt-8">
-            <Link href="/prefeituras" className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-6 py-4 font-semibold text-white hover:bg-emerald-600">
-              Ver uso para prefeituras
+            <Link href="/proposta-municipal" className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-6 py-4 font-semibold text-white hover:bg-emerald-600">
+              Abrir proposta municipal
               <ArrowRight className="w-5 h-5" />
+            </Link>
+            <Link href="/prefeituras" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 border border-white/15 px-6 py-4 font-semibold text-white hover:bg-white/15">
+              Ver uso para prefeituras
             </Link>
             <Link href="/tour" className="inline-flex items-center justify-center gap-2 rounded-xl bg-white/10 border border-white/15 px-6 py-4 font-semibold text-white hover:bg-white/15">
               Ver todos os públicos

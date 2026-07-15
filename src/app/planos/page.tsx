@@ -7,10 +7,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import {
-  ArrowRight,
-  Bot,
   CalendarDays,
-  CheckCircle,
   Copy,
   CreditCard,
   FileText,
@@ -18,8 +15,6 @@ import {
   MessageCircle,
   RefreshCw,
   Sparkles,
-  Stethoscope,
-  Users,
   Wallet,
 } from 'lucide-react'
 
@@ -34,6 +29,7 @@ export default function PlanosPage() {
   const { user, session, professional, loading: authLoading } = useAuth()
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [chargingId, setChargingId] = useState<string | null>(null)
   const [plans, setPlans] = useState<any[]>([])
   const [form, setForm] = useState({
     patient_id: '',
@@ -87,10 +83,7 @@ export default function PlanosPage() {
     try {
       const response = await fetch('/api/billing/nextgen/create-patient-plan', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify(form),
       })
 
@@ -104,13 +97,7 @@ export default function PlanosPage() {
       toast.success(payload.payment_url || payload.pix_copy_paste ? 'Plano criado com Pix inicial' : 'Plano criado em rascunho')
 
       if (payload.payment_url || payload.pix_copy_paste) {
-        const message = buildPlanMessage(form, payload.payment_url, payload.pix_copy_paste)
-        try {
-          await navigator.clipboard.writeText(message)
-          toast.success('Mensagem do plano copiada')
-        } catch {
-          // não trava
-        }
+        await copyPlanMessage(form.patient_name, form.plan_name, form.amount, form.interval, payload.payment_url, payload.pix_copy_paste)
       }
 
       setForm({
@@ -126,6 +113,50 @@ export default function PlanosPage() {
       await loadPlans()
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function createPlanCharge(plan: any) {
+    if (!session?.access_token) {
+      toast.error('Sessão expirada')
+      return
+    }
+
+    setChargingId(plan.id)
+
+    try {
+      const response = await fetch('/api/billing/nextgen/create-plan-charge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ patient_plan_id: plan.id }),
+      })
+
+      const payload = await response.json()
+
+      if (!response.ok) {
+        toast.error(payload.error || 'Erro ao gerar cobrança do plano')
+        return
+      }
+
+      toast.success(payload.payment_url || payload.pix_copy_paste ? 'Cobrança Pix gerada' : 'Cobrança criada em rascunho')
+
+      if (payload.payment_url || payload.pix_copy_paste) {
+        await copyPlanMessage(plan.patient_name, plan.plan_name, String((plan.amount_cents || 0) / 100), plan.interval, payload.payment_url, payload.pix_copy_paste)
+      }
+
+      await loadPlans()
+    } finally {
+      setChargingId(null)
+    }
+  }
+
+  async function copyPlanMessage(patientName: string, planName: string, amount: string, interval: string, paymentUrl?: string, pixCopyPaste?: string) {
+    const message = `Olá, ${patientName || 'paciente'}. Segue o plano ${planName} do MyDataMed no valor de R$ ${amount}/${intervalLabel(interval).toLowerCase()}.\n${paymentUrl ? `Link de pagamento: ${paymentUrl}` : ''}\n${pixCopyPaste ? `Pix copia e cola: ${pixCopyPaste}` : ''}`
+    try {
+      await navigator.clipboard.writeText(message)
+      toast.success('Mensagem do plano copiada')
+    } catch {
+      // não trava
     }
   }
 
@@ -231,9 +262,13 @@ export default function PlanosPage() {
                     <div>
                       <p className="font-semibold text-gray-900">{plan.plan_name}</p>
                       <p className="text-sm text-gray-500">{plan.patient_name || 'Paciente'} • {formatMoney(plan.amount_cents)} • {intervalLabel(plan.interval)} • {plan.status}</p>
-                      <p className="text-xs text-gray-500 mt-1">Próxima cobrança: {formatDate(plan.next_charge_at)}</p>
+                      <p className="text-xs text-gray-500 mt-1">Próxima cobrança: {formatDate(plan.next_charge_at)} • Última: {plan.last_charge_status || 'sem cobrança'}</p>
                     </div>
                     <div className="flex gap-2 flex-wrap">
+                      <button onClick={() => createPlanCharge(plan)} disabled={chargingId === plan.id} className="rounded-xl bg-indigo-700 text-white px-3 py-2 text-sm font-semibold flex items-center gap-1 disabled:opacity-60">
+                        {chargingId === plan.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <CreditCard className="w-4 h-4" />}
+                        Cobrar agora
+                      </button>
                       {plan.last_charge_id && <Link href="/financeiro" className="rounded-xl bg-emerald-600 text-white px-3 py-2 text-sm font-semibold">Ver financeiro</Link>}
                       <button onClick={() => copy(plan.id)} className="rounded-xl border px-3 py-2 text-sm flex items-center gap-1"><Copy className="w-4 h-4" /> ID</button>
                     </div>
@@ -246,10 +281,6 @@ export default function PlanosPage() {
       </section>
     </main>
   )
-}
-
-function buildPlanMessage(form: any, paymentUrl: string, pixCopyPaste: string) {
-  return `Olá, ${form.patient_name}. Segue o plano ${form.plan_name} do MyDataMed no valor de R$ ${form.amount}/${intervalLabel(form.interval).toLowerCase()}.\n${paymentUrl ? `Link de pagamento: ${paymentUrl}` : ''}\n${pixCopyPaste ? `Pix copia e cola: ${pixCopyPaste}` : ''}`
 }
 
 function MiniMetric({ label, value }: any) {

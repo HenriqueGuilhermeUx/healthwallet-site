@@ -82,9 +82,7 @@ export default function DashboardPage() {
   }
 
   const handleKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !code[index] && index > 0) {
-      document.getElementById(`code-${index - 1}`)?.focus()
-    }
+    if (e.key === 'Backspace' && !code[index] && index > 0) document.getElementById(`code-${index - 1}`)?.focus()
   }
 
   const handleSubmit = async () => {
@@ -137,7 +135,7 @@ export default function DashboardPage() {
     <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="text-center mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Olá, {professional.full_name}</h1>
-        <p className="text-gray-600 mt-1">Acesse pacientes, teleconsultas, documentos, IA assistiva e dados autorizados</p>
+        <p className="text-gray-600 mt-1">Acesse pacientes, teleconsultas, documentos, IA assistiva, cobranças e dados autorizados</p>
       </div>
 
       <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
@@ -146,6 +144,13 @@ export default function DashboardPage() {
           <h2 className="font-bold text-lg">Copiloto IA</h2>
           <p className="text-sm text-white/80 mt-1">Resumo, timeline, exames, medicamentos, anamnese e pontos de atenção.</p>
           <span className="inline-flex items-center gap-1 mt-4 text-sm font-semibold">Abrir <ArrowRight className="w-4 h-4" /></span>
+        </Link>
+
+        <Link href="/financeiro" className="bg-gradient-to-br from-emerald-700 to-teal-900 text-white rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
+          <ReceiptText className="w-8 h-8 mb-3" />
+          <h2 className="font-bold text-lg">Financeiro</h2>
+          <p className="text-sm text-white/80 mt-1">Powered by NextGen: Pix, teleconsulta, recorrência e planos mensais.</p>
+          <span className="inline-flex items-center gap-1 mt-4 text-sm font-semibold">Cobrar <ArrowRight className="w-4 h-4" /></span>
         </Link>
 
         <Link href="/teleconsultas" className="bg-gradient-to-br from-cyan-600 to-blue-700 text-white rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
@@ -170,14 +175,8 @@ export default function DashboardPage() {
         </Link>
 
         <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-          <CalendarDays className="w-8 h-8 text-emerald-600 mb-3" />
-          <h2 className="font-bold text-lg">Agenda integrada</h2>
-          <p className="text-sm text-gray-600 mt-1">Consultas online e dados autorizados por evento.</p>
-        </div>
-
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
           <MessageCircle className="w-8 h-8 text-purple-600 mb-3" />
-          <h2 className="font-bold text-lg">CRM multiprofissional</h2>
+          <h2 className="font-bold text-lg">CRM SmartBots</h2>
           <p className="text-sm text-gray-600 mt-1">Lembretes, retornos e relacionamento pós-consulta.</p>
         </div>
       </div>
@@ -185,14 +184,14 @@ export default function DashboardPage() {
       <div className="bg-violet-50 border border-violet-200 rounded-2xl p-4 mb-8 flex items-start gap-3">
         <Brain className="w-5 h-5 text-violet-700 mt-0.5" />
         <p className="text-sm text-violet-950">
-          O Copiloto IA organiza dados autorizados em resumo inteligente, timeline, exames, medicamentos, pendências, preparação pré-consulta e sugestões de anamnese. É apoio ao profissional, não diagnóstico automático.
+          O MyDataMed permite acompanhamento contínuo, autorizado e inteligente — com dados, IA, agenda, documentos, CRM, teleatendimento, cobranças e automações em um só lugar.
         </p>
       </div>
 
       <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-8 flex items-start gap-3">
         <ReceiptText className="w-5 h-5 text-emerald-700 mt-0.5" />
         <p className="text-sm text-emerald-900">
-          O acesso a dados autorizados dos pacientes é gratuito. A busca por CPF/CNS é complementar e não abre dados sem código ou autorização.
+          Camadas internas: Powered by SmartBots para CRM, Staff para agenda/admin, DocWallet para documentos e NextGen para cobranças, Pix, recorrência e planos.
         </p>
       </div>
 
@@ -224,7 +223,7 @@ export default function DashboardPage() {
         <ul className="space-y-2 text-sm text-gray-700">
           <li className="flex items-start gap-2"><Clock className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" /><span>O código expira automaticamente após o tempo definido pelo paciente</span></li>
           <li className="flex items-start gap-2"><FileText className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" /><span>Você só verá os dados que o paciente autorizou</span></li>
-          <li className="flex items-start gap-2"><Send className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" /><span>Após acessar, você pode enviar documentos, orientações e prescrições quando aplicável</span></li>
+          <li className="flex items-start gap-2"><Send className="w-4 h-4 text-emerald-600 mt-0.5 flex-shrink-0" /><span>Após acessar, você pode enviar documentos, orientações, cobranças e prescrições quando aplicável</span></li>
         </ul>
       </div>
 

@@ -45,8 +45,19 @@ function extractChargeFields(payload: any) {
     pixQrCode: charge.qrCode || charge.qr_code || pix.qrCode || null,
     qrCodeImage: charge.qrCodeImage || charge.qrCodeImageURL || charge.qr_code_image || pix.qrCodeImage || null,
     paymentUrl: charge.paymentLinkUrl || charge.paymentUrl || charge.payment_url || charge.link || pix.paymentUrl || null,
-    rawCharge: charge,
   }
+}
+
+async function updateAppointmentBilling(supabase: any, appointmentId: string | null, updates: any) {
+  if (!appointmentId) return
+
+  await supabase
+    .from('telemedicine_appointments')
+    .update({
+      ...updates,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', appointmentId)
 }
 
 export async function POST(req: NextRequest) {
@@ -74,6 +85,21 @@ export async function POST(req: NextRequest) {
       .maybeSingle()
 
     if (!professional) return NextResponse.json({ error: 'Cadastro profissional não encontrado' }, { status: 404 })
+
+    const appointmentId = body.appointment_id || null
+
+    if (appointmentId) {
+      const { data: appointment } = await supabase
+        .from('telemedicine_appointments')
+        .select('id, professional_id, patient_id, user_id, patient_name, patient_email')
+        .eq('id', appointmentId)
+        .maybeSingle()
+
+      if (!appointment) return NextResponse.json({ error: 'Teleconsulta não encontrada' }, { status: 404 })
+      if (appointment.professional_id && appointment.professional_id !== professional.id) {
+        return NextResponse.json({ error: 'Teleconsulta não pertence a este profissional' }, { status: 403 })
+      }
+    }
 
     const chargeType = body.charge_type || 'custom'
     const recurrenceInterval = body.recurrence_interval || null
@@ -119,7 +145,7 @@ export async function POST(req: NextRequest) {
         title,
         description,
         plan_id: planId,
-        appointment_id: body.appointment_id || null,
+        appointment_id: appointmentId,
         amount_cents: amountCents,
         platform_fee_cents: Math.round(amountCents * 0.1),
         professional_net_cents: Math.max(0, amountCents - Math.round(amountCents * 0.1)),
@@ -129,7 +155,7 @@ export async function POST(req: NextRequest) {
         correlation_id: correlationId,
         recurrence_interval: recurrenceInterval,
         product_key: body.product_key || 'mydatamed-nextgen-charge',
-        billing_context: body.billing_context || 'professional',
+        billing_context: body.billing_context || (appointmentId ? 'teleconsultation' : 'professional'),
         due_at: dueAt.toISOString(),
         metadata: {
           source: 'mydatamed-financeiro',
@@ -137,6 +163,7 @@ export async function POST(req: NextRequest) {
           professional_name: professional.full_name,
           professional_email: user.email,
           patient_name: body.patient_name || null,
+          appointment_id: appointmentId,
           ...body.metadata,
         },
       })
@@ -144,8 +171,24 @@ export async function POST(req: NextRequest) {
       .single()
 
     if (localError || !localCharge) {
-      return NextResponse.json({ error: `${localError?.message || 'Erro ao criar cobrança local'}. Rode SQL_NEXTGEN_FINANCEIRO_V1.sql.` }, { status: 500 })
+      return NextResponse.json({ error: `${localError?.message || 'Erro ao criar cobrança local'}. Rode SQL_NEXTGEN_FINANCEIRO_V1.sql e SQL_TELECONSULTA_NEXTGEN_COBRANCAS_V1.sql.` }, { status: 500 })
     }
+
+    await updateAppointmentBilling(supabase, appointmentId, {
+      payment_required: true,
+      payment_status: 'draft',
+      payment_charge_id: localCharge.id,
+      nextgen_charge_id: correlationId,
+      payment_amount_cents: amountCents,
+      payment_currency: 'BRL',
+      payment_requested_at: new Date().toISOString(),
+      billing_metadata: {
+        powered_by: 'NextGen',
+        charge_type: chargeType,
+        charge_id: localCharge.id,
+        correlation_id: correlationId,
+      },
+    })
 
     const { apiKey, baseUrl } = getWooviConfig()
 
@@ -184,11 +227,12 @@ export async function POST(req: NextRequest) {
     }
 
     const fields = extractChargeFields(providerPayload)
+    const nextStatus = fields.pixCopyPaste || fields.paymentUrl ? 'pix_generated' : 'waiting_payment'
 
     const { data: updatedCharge } = await supabase
       .from('professional_payment_charges')
       .update({
-        status: fields.pixCopyPaste || fields.paymentUrl ? 'pix_generated' : 'waiting_payment',
+        status: nextStatus,
         provider_charge_id: fields.providerChargeId,
         pix_qr_code: fields.pixQrCode,
         pix_copy_paste: fields.pixCopyPaste,
@@ -199,6 +243,20 @@ export async function POST(req: NextRequest) {
       .eq('id', localCharge.id)
       .select('*')
       .single()
+
+    await updateAppointmentBilling(supabase, appointmentId, {
+      payment_status: nextStatus,
+      payment_url: fields.paymentUrl,
+      pix_copy_paste: fields.pixCopyPaste,
+      billing_metadata: {
+        powered_by: 'NextGen',
+        provider: 'woovi',
+        charge_type: chargeType,
+        charge_id: localCharge.id,
+        provider_charge_id: fields.providerChargeId,
+        correlation_id: correlationId,
+      },
+    })
 
     return NextResponse.json({
       ok: true,

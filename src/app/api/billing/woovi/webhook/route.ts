@@ -38,8 +38,9 @@ function isExpiredEvent(status?: string | null, eventType?: string | null) {
 }
 
 function isSubscriptionCharge(charge: any) {
-  const product = `${charge?.metadata?.product || ''} ${charge?.product_key || ''} ${charge?.charge_type || ''}`.toLowerCase()
-  return product.includes('mydatamed-pro') || product.includes('subscription') || product.includes('assinatura')
+  const type = String(charge?.charge_type || '').toLowerCase()
+  const product = String(charge?.product_key || charge?.metadata?.product || '').toLowerCase()
+  return type === 'subscription' || product.includes('mydatamed-pro')
 }
 
 function okResponse(extra: Record<string, any> = {}) {
@@ -77,31 +78,41 @@ async function updateAppointmentFromCharge(supabase: any, charge: any, status: s
     .from('telemedicine_appointments')
     .update({
       payment_status: status,
-      payment_paid_at: status === 'paid' ? new Date().toISOString() : undefined,
-      payment_url: charge.payment_url || null,
-      pix_copy_paste: charge.pix_copy_paste || null,
+      payment_paid_at: status === 'paid' ? new Date().toISOString() : null,
       billing_metadata: {
         ...(charge.billing_metadata || {}),
-        powered_by: 'NextGen',
         webhook_confirmed: status === 'paid',
         provider_payload: payload,
+        charge_id: charge.id,
+        correlation_id: charge.correlation_id,
       },
       updated_at: new Date().toISOString(),
     })
     .eq('id', charge.appointment_id)
 }
 
+async function updatePatientPlanFromCharge(supabase: any, charge: any, status: string) {
+  if (!charge?.patient_plan_id) return
+
+  await supabase
+    .from('professional_patient_plans')
+    .update({
+      last_charge_id: charge.id,
+      last_charge_status: status,
+      last_charged_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', charge.patient_plan_id)
+}
+
 export async function POST(req: NextRequest) {
   try {
     const payload = await readJsonSafely(req)
 
-    // Validação/cadastro de webhook pode chegar como POST vazio.
-    // Responde 200 mesmo sem secret para a Woovi aceitar o endpoint.
     if (!payload) {
       return okResponse({ validation: true, received: false })
     }
 
-    // Eventos reais com payload ainda respeitam o secret quando configurado.
     if (!isAuthorized(req)) {
       return NextResponse.json({ error: 'Webhook não autorizado' }, { status: 401 })
     }
@@ -126,15 +137,13 @@ export async function POST(req: NextRequest) {
     let error: string | null = null
 
     if (fields.correlationId || fields.providerChargeId) {
-      const query = supabase
+      const { data: charge } = await supabase
         .from('professional_payment_charges')
         .select('*')
         .eq(fields.correlationId ? 'correlation_id' : 'provider_charge_id', fields.correlationId || fields.providerChargeId)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
-
-      const { data: charge } = await query
 
       if (charge && isPaidEvent(fields.status, fields.eventType)) {
         await supabase
@@ -148,6 +157,7 @@ export async function POST(req: NextRequest) {
           .eq('id', charge.id)
 
         await updateAppointmentFromCharge(supabase, charge, 'paid', payload)
+        await updatePatientPlanFromCharge(supabase, charge, 'paid')
 
         if (isSubscriptionCharge(charge)) {
           await supabase.rpc('activate_mydatamed_pro_after_payment', {
@@ -169,7 +179,10 @@ export async function POST(req: NextRequest) {
           })
           .eq('id', charge.id)
 
-        if (nextStatus === 'expired') await updateAppointmentFromCharge(supabase, charge, 'expired', payload)
+        if (nextStatus === 'expired') {
+          await updateAppointmentFromCharge(supabase, charge, 'expired', payload)
+          await updatePatientPlanFromCharge(supabase, charge, 'expired')
+        }
 
         processed = true
       } else {

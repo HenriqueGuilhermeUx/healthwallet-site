@@ -38,6 +38,8 @@ const DEFAULT_PERMISSIONS = {
   medscore: true,
 }
 
+const emptyNotes = { orientation: '', prescription: '', professional: '' }
+
 export default function TeleconsultasPage() {
   const { user, session, professional, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -48,7 +50,7 @@ export default function TeleconsultasPage() {
   const [savingId, setSavingId] = useState<string | null>(null)
   const [roomLinks, setRoomLinks] = useState<Record<string, string>>({})
   const [chargeAmounts, setChargeAmounts] = useState<Record<string, string>>({})
-  const [notes, setNotes] = useState<Record<string, { orientation: string; prescription: string; professional: string }>>({})
+  const [notes, setNotes] = useState<Record<string, typeof emptyNotes>>({})
 
   const [form, setForm] = useState({
     patient_id: '',
@@ -61,6 +63,7 @@ export default function TeleconsultasPage() {
     duration_minutes: '30',
     room_url: '',
     charge_amount: '150',
+    auto_charge: true,
   })
 
   useEffect(() => {
@@ -86,13 +89,11 @@ export default function TeleconsultasPage() {
       .order('preferred_time', { ascending: false })
       .order('created_at', { ascending: false })
 
-    if (error) {
-      toast.error('Erro ao carregar teleconsultas. Rode os SQLs de teleconsulta no Supabase.')
-    }
+    if (error) toast.error('Erro ao carregar teleconsultas. Rode os SQLs de teleconsulta no Supabase.')
 
     const rows = data || []
     const nextRoomLinks: Record<string, string> = {}
-    const nextNotes: Record<string, { orientation: string; prescription: string; professional: string }> = {}
+    const nextNotes: Record<string, typeof emptyNotes> = {}
     const nextChargeAmounts: Record<string, string> = {}
 
     rows.forEach((item) => {
@@ -217,6 +218,8 @@ export default function TeleconsultasPage() {
       shared_data_permissions: DEFAULT_PERMISSIONS,
       payment_status: 'not_required',
       payment_required: false,
+      payment_amount_cents: form.auto_charge ? Math.round(Number(form.charge_amount || 0) * 100) : null,
+      billing_metadata: form.auto_charge ? { auto_charge_on_schedule: true, powered_by: 'NextGen' } : {},
       created_at: now,
       updated_at: now,
     }
@@ -235,7 +238,12 @@ export default function TeleconsultasPage() {
     await logEvent(data.id, 'appointment_scheduled', 'Profissional agendou teleconsulta.', data.patient_id, { scheduled_at: scheduledAt })
     await upsertCrmContact({ patient_id: form.patient_id, patient_name: form.patient_name, patient_email: form.patient_email, appointment_id: data.id })
 
-    toast.success('Teleconsulta agendada')
+    if (form.auto_charge) {
+      await createNextGenCharge({ ...data, patient_name: form.patient_name, patient_email: form.patient_email }, form.charge_amount, true)
+    } else {
+      toast.success('Teleconsulta agendada')
+    }
+
     setShowForm(false)
     setForm({
       patient_id: '',
@@ -248,6 +256,7 @@ export default function TeleconsultasPage() {
       duration_minutes: '30',
       room_url: '',
       charge_amount: '150',
+      auto_charge: true,
     })
     load()
   }
@@ -344,13 +353,13 @@ export default function TeleconsultasPage() {
     load()
   }
 
-  async function createNextGenCharge(item: any) {
+  async function createNextGenCharge(item: any, forcedAmount?: string, silent = false) {
     if (!session?.access_token) {
       toast.error('Sessão expirada. Entre novamente.')
       return
     }
 
-    const amount = chargeAmounts[item.id] || '150'
+    const amount = forcedAmount || chargeAmounts[item.id] || '150'
     if (!amount || Number(amount) <= 0) {
       toast.error('Informe um valor válido')
       return
@@ -376,6 +385,7 @@ export default function TeleconsultasPage() {
           preferred_date: item.preferred_date,
           preferred_time: item.preferred_time,
           powered_by: 'NextGen',
+          auto_charge_on_schedule: silent,
         },
       }),
     })
@@ -401,7 +411,7 @@ export default function TeleconsultasPage() {
     }
 
     setSavingId(null)
-    load()
+    if (!silent) load()
   }
 
   async function sendReminder(item: any) {
@@ -425,7 +435,7 @@ export default function TeleconsultasPage() {
   }
 
   async function completeAppointment(item: any) {
-    const note = notes[item.id] || { orientation: '', prescription: '', professional: '' }
+    const note = notes[item.id] || emptyNotes
 
     await updateAppointment(item, {
       status: 'completed',
@@ -464,6 +474,9 @@ export default function TeleconsultasPage() {
           <p className="text-gray-600 mt-1">Daily premium, cobrança NextGen, dados autorizados, lembretes, documentos e CRM em um só lugar.</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
+          <Link href="/planos" className="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-200 text-indigo-700 px-5 py-3 font-semibold hover:bg-indigo-50">
+            <CreditCard className="w-5 h-5" /> Planos
+          </Link>
           <Link href="/financeiro" className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 text-emerald-700 px-5 py-3 font-semibold hover:bg-emerald-50">
             <ReceiptText className="w-5 h-5" /> Financeiro
           </Link>
@@ -483,7 +496,7 @@ export default function TeleconsultasPage() {
 
       <div className="grid md:grid-cols-4 gap-3">
         <FeatureStrip icon={Sparkles} title="Daily premium" description="Gere sala privada direto no MyDataMed Pro." />
-        <FeatureStrip icon={Wallet} title="Powered by NextGen" description="Crie cobrança Pix para teleconsulta em 1 clique." />
+        <FeatureStrip icon={Wallet} title="Powered by NextGen" description="Cobre ao agendar ou em 1 clique." />
         <FeatureStrip icon={MessageCircle} title="SmartBots CRM" description="Lembretes e follow-up preparados como tarefas." />
         <FeatureStrip icon={FileText} title="DocWallet" description="Orientações, documentos e validações no fluxo." />
       </div>
@@ -523,8 +536,13 @@ export default function TeleconsultasPage() {
             <DateInput label="Data" value={form.preferred_date} onChange={(value: string) => setForm({ ...form, preferred_date: value })} />
             <TimeInput label="Horário" value={form.preferred_time} onChange={(value: string) => setForm({ ...form, preferred_time: value })} />
             <Input label="Duração min." value={form.duration_minutes} onChange={(value: string) => setForm({ ...form, duration_minutes: value })} />
-            <Input label="Valor sugerido R$" value={form.charge_amount} onChange={(value: string) => setForm({ ...form, charge_amount: value })} />
+            <Input label="Valor R$" value={form.charge_amount} onChange={(value: string) => setForm({ ...form, charge_amount: value })} />
           </div>
+
+          <label className="flex items-start gap-3 rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-sm text-emerald-900">
+            <input type="checkbox" checked={form.auto_charge} onChange={(e) => setForm({ ...form, auto_charge: e.target.checked })} className="mt-1" />
+            <span><strong>Cobrar ao agendar.</strong> O MyDataMed cria a teleconsulta e já gera cobrança NextGen/Pix vinculada ao atendimento.</span>
+          </label>
 
           <Input label="Link manual opcional" value={form.room_url} onChange={(value: string) => setForm({ ...form, room_url: value })} placeholder="Cole Google Meet / Zoom / Daily ou deixe vazio para gerar Daily depois" />
 
@@ -556,7 +574,7 @@ export default function TeleconsultasPage() {
                 setRoomLink={(value: string) => setRoomLinks({ ...roomLinks, [item.id]: value })}
                 chargeAmount={chargeAmounts[item.id] || '150'}
                 setChargeAmount={(value: string) => setChargeAmounts({ ...chargeAmounts, [item.id]: value })}
-                note={notes[item.id] || { orientation: item.orientation_text || '', prescription: item.prescription_text || '', professional: item.professional_notes || '' }}
+                note={notes[item.id] || emptyNotes}
                 setNote={(value: any) => setNotes({ ...notes, [item.id]: value })}
                 onConfirm={() => confirmAppointment(item)}
                 onCreateDaily={() => createDailyRoom(item)}

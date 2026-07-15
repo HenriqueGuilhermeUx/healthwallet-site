@@ -32,6 +32,16 @@ function isPaidEvent(status?: string | null, eventType?: string | null) {
   return value.includes('paid') || value.includes('completed') || value.includes('confirmed') || value.includes('pix-paid')
 }
 
+function isExpiredEvent(status?: string | null, eventType?: string | null) {
+  const value = `${status || ''} ${eventType || ''}`.toLowerCase()
+  return value.includes('expired') || value.includes('cancelled') || value.includes('canceled')
+}
+
+function isSubscriptionCharge(charge: any) {
+  const product = `${charge?.metadata?.product || ''} ${charge?.product_key || ''} ${charge?.charge_type || ''}`.toLowerCase()
+  return product.includes('mydatamed-pro') || product.includes('subscription') || product.includes('assinatura')
+}
+
 function okResponse(extra: Record<string, any> = {}) {
   return NextResponse.json({ ok: true, service: 'woovi-webhook', ...extra }, { status: 200 })
 }
@@ -58,6 +68,27 @@ function isAuthorized(req: NextRequest) {
     req.nextUrl.searchParams.get('secret')
 
   return incomingSecret === expectedSecret
+}
+
+async function updateAppointmentFromCharge(supabase: any, charge: any, status: string, payload: any) {
+  if (!charge?.appointment_id) return
+
+  await supabase
+    .from('telemedicine_appointments')
+    .update({
+      payment_status: status,
+      payment_paid_at: status === 'paid' ? new Date().toISOString() : undefined,
+      payment_url: charge.payment_url || null,
+      pix_copy_paste: charge.pix_copy_paste || null,
+      billing_metadata: {
+        ...(charge.billing_metadata || {}),
+        powered_by: 'NextGen',
+        webhook_confirmed: status === 'paid',
+        provider_payload: payload,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', charge.appointment_id)
 }
 
 export async function POST(req: NextRequest) {
@@ -116,21 +147,29 @@ export async function POST(req: NextRequest) {
           })
           .eq('id', charge.id)
 
-        await supabase.rpc('activate_mydatamed_pro_after_payment', {
-          p_professional_user_id: charge.professional_user_id,
-          p_professional_id: charge.professional_id || null,
-          p_charge_id: charge.id,
-        })
+        await updateAppointmentFromCharge(supabase, charge, 'paid', payload)
+
+        if (isSubscriptionCharge(charge)) {
+          await supabase.rpc('activate_mydatamed_pro_after_payment', {
+            p_professional_user_id: charge.professional_user_id,
+            p_professional_id: charge.professional_id || null,
+            p_charge_id: charge.id,
+          })
+        }
 
         processed = true
       } else if (charge) {
+        const nextStatus = isExpiredEvent(fields.status, fields.eventType) ? 'expired' : charge.status
+
         await supabase
           .from('professional_payment_charges')
           .update({
-            status: fields.status?.toLowerCase()?.includes('expired') ? 'expired' : charge.status,
+            status: nextStatus,
             provider_payload: payload,
           })
           .eq('id', charge.id)
+
+        if (nextStatus === 'expired') await updateAppointmentFromCharge(supabase, charge, 'expired', payload)
 
         processed = true
       } else {

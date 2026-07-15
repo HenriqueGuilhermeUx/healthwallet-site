@@ -22,6 +22,7 @@ import {
   Wallet,
   Search,
   CreditCard,
+  Brain,
 } from 'lucide-react'
 
 interface AccessCode {
@@ -133,13 +134,20 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
+    <div className="max-w-7xl mx-auto px-4 py-8">
       <div className="text-center mb-8">
         <h1 className="text-2xl font-bold text-gray-900">Olá, {professional.full_name}</h1>
-        <p className="text-gray-600 mt-1">Acesse pacientes, teleconsultas, documentos profissionais e dados autorizados</p>
+        <p className="text-gray-600 mt-1">Acesse pacientes, teleconsultas, documentos, IA assistiva e dados autorizados</p>
       </div>
 
-      <div className="grid md:grid-cols-5 gap-4 mb-8">
+      <div className="grid md:grid-cols-3 lg:grid-cols-6 gap-4 mb-8">
+        <Link href="/copiloto" className="bg-gradient-to-br from-violet-700 to-slate-950 text-white rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
+          <Brain className="w-8 h-8 mb-3" />
+          <h2 className="font-bold text-lg">Copiloto IA</h2>
+          <p className="text-sm text-white/80 mt-1">Resumo, timeline, exames, medicamentos, anamnese e pontos de atenção.</p>
+          <span className="inline-flex items-center gap-1 mt-4 text-sm font-semibold">Abrir <ArrowRight className="w-4 h-4" /></span>
+        </Link>
+
         <Link href="/teleconsultas" className="bg-gradient-to-br from-cyan-600 to-blue-700 text-white rounded-2xl p-5 shadow-lg hover:shadow-xl transition-shadow">
           <Video className="w-8 h-8 mb-3" />
           <h2 className="font-bold text-lg">Teleconsultas</h2>
@@ -172,6 +180,13 @@ export default function DashboardPage() {
           <h2 className="font-bold text-lg">CRM multiprofissional</h2>
           <p className="text-sm text-gray-600 mt-1">Lembretes, retornos e relacionamento pós-consulta.</p>
         </div>
+      </div>
+
+      <div className="bg-violet-50 border border-violet-200 rounded-2xl p-4 mb-8 flex items-start gap-3">
+        <Brain className="w-5 h-5 text-violet-700 mt-0.5" />
+        <p className="text-sm text-violet-950">
+          O Copiloto IA organiza dados autorizados em resumo inteligente, timeline, exames, medicamentos, pendências, preparação pré-consulta e sugestões de anamnese. É apoio ao profissional, não diagnóstico automático.
+        </p>
       </div>
 
       <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 mb-8 flex items-start gap-3">
@@ -220,7 +235,10 @@ export default function DashboardPage() {
             {loadingRecent ? <div className="text-center py-4"><Loader2 className="w-6 h-6 animate-spin text-emerald-600 mx-auto" /></div> : recentAccess.map((access) => (
               <div key={access.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
                 <div><p className="font-medium text-gray-900">Acesso {access.code}</p><p className="text-xs text-gray-500">{new Date(access.created_at).toLocaleDateString('pt-BR')}</p></div>
-                <Link href={`/patient/${access.id}`} className="text-emerald-600 text-sm font-medium hover:underline">Ver →</Link>
+                <div className="flex gap-3">
+                  <Link href={`/copiloto?patient=${access.patient_id}`} className="text-violet-700 text-sm font-medium hover:underline">Copiloto IA</Link>
+                  <Link href={`/patient/${access.id}`} className="text-emerald-600 text-sm font-medium hover:underline">Ver →</Link>
+                </div>
               </div>
             ))}
           </div>

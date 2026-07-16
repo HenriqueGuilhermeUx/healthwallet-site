@@ -10,6 +10,7 @@ import {
   ArrowLeft,
   Brain,
   CalendarDays,
+  CheckCircle,
   FileText,
   Loader2,
   MessageCircle,
@@ -23,9 +24,10 @@ import {
 
 export default function CareLinkPatientPage({ params }: { params: Promise<{ linkId: string }> }) {
   const resolvedParams = use(params)
-  const { user, professional, loading: authLoading } = useAuth()
+  const { user, session, professional, loading: authLoading } = useAuth()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
+  const [savingTask, setSavingTask] = useState<string | null>(null)
   const [careLink, setCareLink] = useState<any>(null)
   const [profile, setProfile] = useState<any>(null)
   const [records, setRecords] = useState<any[]>([])
@@ -108,6 +110,30 @@ export default function CareLinkPatientPage({ params }: { params: Promise<{ link
     setLoading(false)
   }
 
+  async function createSmartBotsTask(action: string) {
+    if (!session?.access_token || !careLink?.id) {
+      toast.error('Sessão expirada')
+      return
+    }
+
+    setSavingTask(action)
+    try {
+      const response = await fetch('/api/care-links/create-task', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ care_link_id: careLink.id, action }),
+      })
+      const payload = await response.json()
+      if (!response.ok) {
+        toast.error(payload.error || 'Erro ao criar tarefa')
+        return
+      }
+      toast.success('Tarefa SmartBots criada')
+    } finally {
+      setSavingTask(null)
+    }
+  }
+
   const scope = careLink?.scope || {}
   const activeMeds = useMemo(() => medications.filter((item) => item.is_active !== false), [medications])
   const patientName = profile?.full_name || profile?.name || careLink?.patient_name || careLink?.patient_email || 'Paciente acompanhado'
@@ -172,6 +198,20 @@ export default function CareLinkPatientPage({ params }: { params: Promise<{ link
         </Panel>
       </section>
 
+      <section className="rounded-2xl bg-white border border-gray-100 shadow-sm p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <MessageCircle className="w-5 h-5 text-emerald-600" />
+          <h2 className="font-bold text-lg">Acompanhamento SmartBots</h2>
+        </div>
+        <p className="text-sm text-gray-600 mb-4">Crie tarefas operacionais para manter o paciente acompanhado sem depender de memória manual.</p>
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <TaskButton loading={savingTask === 'follow_up_7d'} icon={CheckCircle} title="Follow-up 7 dias" onClick={() => createSmartBotsTask('follow_up_7d')} />
+          <TaskButton loading={savingTask === 'follow_up_30d'} icon={CalendarDays} title="Retorno 30 dias" onClick={() => createSmartBotsTask('follow_up_30d')} />
+          <TaskButton loading={savingTask === 'request_exams'} icon={FileText} title="Pedir exames/docs" onClick={() => createSmartBotsTask('request_exams')} />
+          <TaskButton loading={savingTask === 'update_profile'} icon={ShieldCheck} title="Atualizar Passport" onClick={() => createSmartBotsTask('update_profile')} />
+        </div>
+      </section>
+
       <section className="grid lg:grid-cols-3 gap-5">
         <DataSection title="Exames e documentos" icon={FileText} items={scope.exams === false ? [] : records} empty={scope.exams === false ? 'Escopo não autorizado para exames.' : 'Nenhum exame/documento encontrado.'} render={(item: any) => (
           <div><p className="font-medium text-gray-900">{item.exam_type || item.title || item.file_name || 'Exame/documento'}</p><p className="text-xs text-gray-500">{formatDate(item.record_date || item.created_at)}</p></div>
@@ -209,6 +249,10 @@ function InfoCard({ icon: Icon, title, value }: any) {
 
 function Panel({ title, icon: Icon, children }: any) {
   return <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5"><div className="flex items-center gap-2 mb-4"><Icon className="w-5 h-5 text-emerald-600" /><h2 className="font-bold text-lg">{title}</h2></div>{children}</section>
+}
+
+function TaskButton({ loading, icon: Icon, title, onClick }: any) {
+  return <button onClick={onClick} disabled={loading} className="rounded-2xl border bg-gray-50 hover:bg-emerald-50 hover:border-emerald-100 p-4 text-left flex items-center gap-3 disabled:opacity-60"><span className="w-10 h-10 rounded-xl bg-white border flex items-center justify-center text-emerald-700">{loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <Icon className="w-5 h-5" />}</span><span className="font-semibold text-gray-900 text-sm">{title}</span></button>
 }
 
 function DataSection({ title, icon: Icon, items, empty, render }: any) {

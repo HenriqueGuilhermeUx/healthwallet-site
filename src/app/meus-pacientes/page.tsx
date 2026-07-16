@@ -8,11 +8,8 @@ import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import {
   ArrowRight,
-  Bot,
   Brain,
   CalendarDays,
-  CheckCircle,
-  Clock,
   FileText,
   Loader2,
   MessageCircle,
@@ -20,7 +17,6 @@ import {
   ShieldCheck,
   Sparkles,
   UserPlus,
-  Users,
   Wallet,
   XCircle,
 } from 'lucide-react'
@@ -36,6 +32,17 @@ const scopeOptions = [
   ['family', 'Família/dependentes'],
 ]
 
+const defaultScope: any = {
+  summary: true,
+  exams: true,
+  medications: true,
+  timeline: true,
+  passport: true,
+  medscore: true,
+  documents: true,
+  family: false,
+}
+
 export default function MeusPacientesPage() {
   const { user, session, professional, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -49,16 +56,7 @@ export default function MeusPacientesPage() {
     duration_days: '365',
     continuous: false,
     request_note: 'Solicito vínculo assistencial contínuo para acompanhar dados autorizados, retornos, exames e orientações.',
-    scope: {
-      summary: true,
-      exams: true,
-      medications: true,
-      timeline: true,
-      passport: true,
-      medscore: true,
-      documents: true,
-      family: false,
-    } as any,
+    scope: defaultScope,
   })
 
   useEffect(() => {
@@ -104,10 +102,7 @@ export default function MeusPacientesPage() {
     try {
       const response = await fetch('/api/care-links/request', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${session.access_token}`,
-        },
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
         body: JSON.stringify({
           patient_id: form.patient_id || null,
           patient_email: form.patient_email || null,
@@ -133,16 +128,7 @@ export default function MeusPacientesPage() {
         duration_days: '365',
         continuous: false,
         request_note: 'Solicito vínculo assistencial contínuo para acompanhar dados autorizados, retornos, exames e orientações.',
-        scope: {
-          summary: true,
-          exams: true,
-          medications: true,
-          timeline: true,
-          passport: true,
-          medscore: true,
-          documents: true,
-          family: false,
-        },
+        scope: defaultScope,
       })
       await loadLinks()
     } finally {
@@ -152,9 +138,10 @@ export default function MeusPacientesPage() {
 
   async function cancelRequest(item: any) {
     if (!confirm('Cancelar/revogar este vínculo?')) return
+    const nextStatus = item.status === 'active' ? 'revoked' : 'cancelled'
     const { error } = await supabase
       .from('professional_care_links')
-      .update({ status: 'cancelled', revoked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
+      .update({ status: nextStatus, revoked_at: new Date().toISOString(), updated_at: new Date().toISOString() })
       .eq('id', item.id)
 
     if (error) {
@@ -162,7 +149,7 @@ export default function MeusPacientesPage() {
       return
     }
 
-    toast.success('Vínculo cancelado')
+    toast.success('Vínculo encerrado')
     loadLinks()
   }
 
@@ -188,7 +175,7 @@ export default function MeusPacientesPage() {
             </div>
             <h1 className="text-3xl md:text-5xl font-bold leading-tight">Meus pacientes acompanhados.</h1>
             <p className="text-white/70 mt-4 text-lg max-w-3xl">
-              Solicite acompanhamento contínuo autorizado para ver histórico, exames, medicamentos, timeline, Passport, IA, CRM, agenda, documentos e planos em um só lugar.
+              Solicite acompanhamento contínuo autorizado e transforme cada vínculo ativo em painel do paciente, Copiloto IA, agenda, CRM, documentos e planos.
             </p>
             <div className="flex flex-col sm:flex-row gap-3 mt-7">
               <Link href="/copiloto" className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 font-semibold hover:bg-emerald-600"><Brain className="w-5 h-5" /> Copiloto IA</Link>
@@ -273,26 +260,29 @@ export default function MeusPacientesPage() {
             {loading ? <div className="py-8 flex justify-center"><Loader2 className="w-7 h-7 animate-spin text-emerald-600" /></div> : (
               <div className="space-y-3">
                 {links.length === 0 && <Empty text="Nenhum vínculo assistencial criado ainda." />}
-                {links.map((item) => (
-                  <div key={item.id} className="rounded-2xl border bg-gray-50 p-4">
-                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-semibold text-gray-900">{item.patient_name || item.patient_email || `Paciente ${String(item.patient_id || '').slice(0, 8)}`}</p>
-                          <StatusBadge status={item.status} />
+                {links.map((item) => {
+                  const active = item.status === 'active' && item.patient_id
+                  return (
+                    <div key={item.id} className="rounded-2xl border bg-gray-50 p-4">
+                      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="font-semibold text-gray-900">{item.patient_name || item.patient_email || `Paciente ${String(item.patient_id || '').slice(0, 8)}`}</p>
+                            <StatusBadge status={item.status} />
+                          </div>
+                          <p className="text-sm text-gray-500 mt-1">{item.patient_email || 'Sem e-mail'} • {item.continuous ? 'Contínuo' : expiresText(item.expires_at, item.duration_days)}</p>
+                          <p className="text-xs text-gray-500 mt-1">Escopo: {scopeLabel(item.scope || item.requested_scope)}</p>
                         </div>
-                        <p className="text-sm text-gray-500 mt-1">{item.patient_email || 'Sem e-mail'} • {item.continuous ? 'Contínuo' : expiresText(item.expires_at, item.duration_days)}</p>
-                        <p className="text-xs text-gray-500 mt-1">Escopo: {scopeLabel(item.scope || item.requested_scope)}</p>
-                      </div>
-                      <div className="flex gap-2 flex-wrap">
-                        {item.patient_id && <Link href={`/copiloto?patient=${item.patient_id}`} className="rounded-xl bg-violet-700 text-white px-3 py-2 text-sm font-semibold">Copiloto</Link>}
-                        {item.patient_id && <Link href={`/patient/by-patient/${item.patient_id}`} className="rounded-xl bg-emerald-600 text-white px-3 py-2 text-sm font-semibold">Dados</Link>}
-                        {item.patient_id && <Link href={`/planos?patient=${item.patient_id}`} className="rounded-xl border px-3 py-2 text-sm font-semibold">Plano</Link>}
-                        {['pending', 'active'].includes(item.status) && <button onClick={() => cancelRequest(item)} className="rounded-xl border border-red-200 text-red-600 px-3 py-2 text-sm font-semibold"><XCircle className="w-4 h-4 inline mr-1" />Encerrar</button>}
+                        <div className="flex gap-2 flex-wrap">
+                          {active && <Link href={`/patient/care-link/${item.id}`} className="rounded-xl bg-emerald-600 text-white px-3 py-2 text-sm font-semibold inline-flex items-center gap-1">Painel <ArrowRight className="w-4 h-4" /></Link>}
+                          {active && <Link href={`/copiloto?careLink=${item.id}`} className="rounded-xl bg-violet-700 text-white px-3 py-2 text-sm font-semibold">Copiloto</Link>}
+                          {active && <Link href={`/planos?patient=${item.patient_id}`} className="rounded-xl border px-3 py-2 text-sm font-semibold">Plano</Link>}
+                          {['pending', 'active'].includes(item.status) && <button onClick={() => cancelRequest(item)} className="rounded-xl border border-red-200 text-red-600 px-3 py-2 text-sm font-semibold"><XCircle className="w-4 h-4 inline mr-1" />Encerrar</button>}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </section>

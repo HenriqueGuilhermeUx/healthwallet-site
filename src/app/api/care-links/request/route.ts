@@ -34,6 +34,32 @@ function expiresAt(durationDays: number, continuous: boolean) {
   return new Date(Date.now() + Math.max(1, days) * 24 * 60 * 60 * 1000).toISOString()
 }
 
+async function emitAutomationEvent(supabase: ReturnType<typeof getSupabaseAdmin>, payload: any) {
+  try {
+    await supabase.from('automation_events').insert({
+      event_type: payload.event_type,
+      source_app: 'mydatamed',
+      source_table: 'professional_care_links',
+      source_id: payload.care_link_id || null,
+      actor_user_id: payload.actor_user_id || null,
+      actor_role: 'professional',
+      patient_id: payload.patient_id || null,
+      professional_id: payload.professional_id || null,
+      care_link_id: payload.care_link_id || null,
+      payload: payload.payload || {},
+      metadata: {
+        powered_by: 'MyDataMed Autopilot',
+        n8n_ready: true,
+        ...(payload.metadata || {}),
+      },
+      priority: payload.priority || 4,
+      status: 'pending',
+    })
+  } catch {
+    // Não trava solicitação se a fila Autopilot ainda não estiver no banco.
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const token = getBearerToken(req)
@@ -96,6 +122,7 @@ export async function POST(req: NextRequest) {
         .single()
 
       if (updateError) return NextResponse.json({ error: updateError.message }, { status: 500 })
+
       await supabase.from('professional_care_link_events').insert({
         care_link_id: existing.id,
         actor_user_id: user.id,
@@ -104,6 +131,16 @@ export async function POST(req: NextRequest) {
         description: 'Profissional atualizou solicitação de vínculo assistencial.',
         metadata: { scope, duration_days: durationDays, continuous },
       })
+
+      await emitAutomationEvent(supabase, {
+        event_type: 'care_link_request_updated',
+        actor_user_id: user.id,
+        professional_id: professional.id,
+        patient_id: patientId || existing.patient_id,
+        care_link_id: existing.id,
+        payload: { scope, duration_days: durationDays, continuous, patient_email: patientEmail || existing.patient_email, patient_name: patientName || existing.patient_name },
+      })
+
       return NextResponse.json({ ok: true, care_link: updated, mode: 'updated' })
     }
 
@@ -147,6 +184,15 @@ export async function POST(req: NextRequest) {
       event_type: 'requested',
       description: 'Profissional solicitou vínculo assistencial contínuo.',
       metadata: { scope, duration_days: durationDays, continuous },
+    })
+
+    await emitAutomationEvent(supabase, {
+      event_type: 'care_link_requested',
+      actor_user_id: user.id,
+      professional_id: professional.id,
+      patient_id: patientId,
+      care_link_id: careLink.id,
+      payload: { scope, duration_days: durationDays, continuous, patient_email: patientEmail, patient_name: patientName, professional_name: professional.full_name },
     })
 
     return NextResponse.json({ ok: true, care_link: careLink })

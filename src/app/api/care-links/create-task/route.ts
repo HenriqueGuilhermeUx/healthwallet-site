@@ -47,6 +47,33 @@ const templates: Record<string, any> = {
   },
 }
 
+async function emitAutomationEvent(supabase: ReturnType<typeof getSupabaseAdmin>, payload: any) {
+  try {
+    await supabase.from('automation_events').insert({
+      event_type: payload.event_type,
+      source_app: 'mydatamed',
+      source_table: payload.source_table || 'professional_crm_tasks',
+      source_id: payload.source_id || null,
+      actor_user_id: payload.actor_user_id || null,
+      actor_role: payload.actor_role || 'professional',
+      patient_id: payload.patient_id || null,
+      professional_id: payload.professional_id || null,
+      care_link_id: payload.care_link_id || null,
+      task_id: payload.task_id || null,
+      payload: payload.payload || {},
+      metadata: {
+        powered_by: 'MyDataMed Autopilot',
+        n8n_ready: true,
+        ...(payload.metadata || {}),
+      },
+      priority: payload.priority || 5,
+      status: 'pending',
+    })
+  } catch {
+    // Não trava a experiência se a fila de automação ainda não tiver sido rodada no Supabase.
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const token = getBearerToken(req)
@@ -123,6 +150,31 @@ export async function POST(req: NextRequest) {
       event_type: 'smartbots_task_created',
       description: `Tarefa criada pelo painel do vínculo: ${template.title}.`,
       metadata: { task_id: task.id, action, due_at: dueAt },
+    })
+
+    await emitAutomationEvent(supabase, {
+      event_type: 'smartbots_task_created',
+      source_id: task.id,
+      actor_user_id: user.id,
+      actor_role: 'professional',
+      patient_id: careLink.patient_id,
+      professional_id: professional.id,
+      care_link_id: careLink.id,
+      task_id: task.id,
+      priority: action === 'request_exams' ? 3 : 5,
+      payload: {
+        action,
+        title: task.title,
+        description: task.description,
+        due_at: task.due_at,
+        channel: task.channel,
+        patient_name: careLink.patient_name,
+        professional_name: professional.full_name,
+      },
+      metadata: {
+        smartbots: true,
+        staff: true,
+      },
     })
 
     return NextResponse.json({ ok: true, task })

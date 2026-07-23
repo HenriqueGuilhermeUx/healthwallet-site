@@ -1,0 +1,196 @@
+{
+  "name": "MyDataMed Autopilot - Polling V1",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Rodar manualmente",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -720,
+        80
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "A cada 5 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -720,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "url": "https://mydatamed.com/api/automation/event?status=pending&limit=20",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-automation-secret",
+              "value": "CHANGE_ME_AUTOMATION_API_SECRET"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "fetch-pending-events",
+      "name": "Buscar eventos pendentes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -460,
+        -20
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const supported = new Set(['care_link_approved', 'smartbots_task_created', 'care_link_revoked']);\nconst events = Array.isArray($json.events) ? $json.events : [];\nreturn events\n  .filter((event) => supported.has(event.event_type))\n  .map((event) => ({ json: { event } }));"
+      },
+      "id": "normalize-events",
+      "name": "Filtrar eventos suportados",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -200,
+        -20
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://mydatamed.com/api/automation/process-event",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-automation-secret",
+              "value": "CHANGE_ME_AUTOMATION_API_SECRET"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "event_id",
+              "value": "={{$json.event.id}}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "process-event-api",
+      "name": "Processar evento no MyDataMed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        80,
+        -20
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "return items.map((item) => ({\n  json: {\n    ok: item.json.ok,\n    status: item.json.status,\n    event_id: item.json.event?.id || item.json.result?.event_id || null,\n    result: item.json.result || {},\n    processed_at: new Date().toISOString(),\n  },\n}));"
+      },
+      "id": "summary-node",
+      "name": "Resumo da execução",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        360,
+        -20
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Rodar manualmente": {
+      "main": [
+        [
+          {
+            "node": "Buscar eventos pendentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "A cada 5 minutos": {
+      "main": [
+        [
+          {
+            "node": "Buscar eventos pendentes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar eventos pendentes": {
+      "main": [
+        [
+          {
+            "node": "Filtrar eventos suportados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filtrar eventos suportados": {
+      "main": [
+        [
+          {
+            "node": "Processar evento no MyDataMed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Processar evento no MyDataMed": {
+      "main": [
+        [
+          {
+            "node": "Resumo da execução",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "mydatamed-autopilot-polling-v1",
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "id": "mydatamed-autopilot-polling-v1",
+  "tags": [
+    {
+      "name": "MyDataMed"
+    },
+    {
+      "name": "Autopilot"
+    },
+    {
+      "name": "HealthWallet"
+    }
+  ]
+}

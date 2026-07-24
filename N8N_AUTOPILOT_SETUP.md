@@ -4,10 +4,10 @@ Este documento descreve o fluxo operacional para usar o n8n hospedado no Oracle 
 
 A lógica principal é:
 
-1. MyDataMed e HealthWallet gravam eventos em `automation_events`.
+1. MyDataMed, HealthWallet e integrações externas gravam eventos em `automation_events`.
 2. O n8n busca eventos pendentes por polling.
 3. O n8n chama a API interna do MyDataMed para processar cada evento.
-4. A API cria tarefas SmartBots/Staff, registra auditoria e marca o evento como `processed`, `skipped` ou `failed`.
+4. A API cria teleconsultas, tarefas SmartBots/Staff, registra auditoria e marca o evento como `processed`, `skipped` ou `failed`.
 
 ## 1. Variáveis recomendadas no Netlify
 
@@ -15,13 +15,25 @@ A lógica principal é:
 AUTOMATION_API_SECRET=crie_um_segredo_forte
 N8N_AUTOPILOT_SECRET=o_mesmo_ou_outro_segredo
 N8N_AUTOPILOT_WEBHOOK_URL=https://SEU_N8N/webhook/mydatamed-autopilot
+CALCOM_WEBHOOK_SECRET=crie_um_segredo_forte_para_calcom
 ```
 
 `N8N_AUTOPILOT_WEBHOOK_URL` é opcional. Se estiver vazio, os eventos ficam em `automation_events` para o n8n buscar por polling.
 
 Para o primeiro ciclo, prefira polling. É mais fácil de auditar e evita depender de webhook exposto.
 
-## 2. Endpoints disponíveis
+## 2. SQLs necessários
+
+Rode no Supabase, nesta ordem:
+
+```text
+SQL_AUTOMATION_EVENTS_V1.sql
+SQL_TELECONSULTA_CRM_NEXTGEN_V2.sql
+SQL_TELECONSULTA_NEXTGEN_COBRANCAS_V1.sql
+SQL_CALCOM_AGENDA_V1.sql
+```
+
+## 3. Endpoints disponíveis
 
 ### Criar evento
 
@@ -92,7 +104,34 @@ Eventos processados nesta versão:
 care_link_approved
 smartbots_task_created
 care_link_revoked
+calendar_booking_created
+calendar_booking_rescheduled
+calendar_booking_cancelled
 ```
+
+### Webhook Cal.com / Cal.diy
+
+Configure no Cal.com/Cal.diy:
+
+```http
+POST https://mydatamed.com/api/integrations/calcom/webhook?secret=<CALCOM_WEBHOOK_SECRET>
+```
+
+Ou envie o segredo em header:
+
+```http
+x-calcom-secret: <CALCOM_WEBHOOK_SECRET>
+```
+
+Eventos que o endpoint normaliza:
+
+```text
+BOOKING_CREATED / booking.created → calendar_booking_created
+BOOKING_RESCHEDULED / booking.rescheduled → calendar_booking_rescheduled
+BOOKING_CANCELLED / booking.cancelled → calendar_booking_cancelled
+```
+
+O webhook grava o payload bruto em `calcom_webhook_events` e cria um evento em `automation_events`. O n8n processa depois.
 
 ### Marcar evento manualmente como processado
 
@@ -123,7 +162,7 @@ Content-Type: application/json
 }
 ```
 
-## 3. Workflow JSON importável
+## 4. Workflow JSON importável
 
 Arquivo criado no repositório:
 
@@ -153,35 +192,50 @@ CHANGE_ME_AUTOMATION_API_SECRET
 
 pelo mesmo valor configurado no Netlify como `AUTOMATION_API_SECRET`.
 
-## 4. Primeiro workflow recomendado no n8n
+## 5. Fluxo Cal.com recomendado
 
-Nome: `MyDataMed Autopilot - Polling V1`
+### Opção A — Cal.com Cloud
 
-### Gatilho
+1. Crie o evento do profissional no Cal.com.
+2. Adicione perguntas simples: nome, e-mail, motivo da consulta.
+3. Em metadata ou querystring, envie `professional_id` quando possível.
+4. Configure o webhook para:
 
-Use um Cron a cada 5 minutos:
-
-```http
-GET https://mydatamed.com/api/automation/event?status=pending&limit=20
-x-automation-secret: <AUTOMATION_API_SECRET>
+```text
+https://mydatamed.com/api/integrations/calcom/webhook?secret=<CALCOM_WEBHOOK_SECRET>&professional_id=<UUID_DO_PROFISSIONAL>
 ```
 
-### Processamento
+5. Marque eventos de booking criado, cancelado e reagendado.
 
-Para cada evento retornado, chamar:
+### Opção B — Cal.diy/self-host
 
-```http
-POST https://mydatamed.com/api/automation/process-event
-x-automation-secret: <AUTOMATION_API_SECRET>
+Use a mesma URL de webhook. A vantagem é controle; a desvantagem é manutenção.
+
+### Dados que podem ir no Cal.com
+
+```text
+nome do paciente
+e-mail do paciente
+tipo de consulta
+data e hora
+motivo resumido
+professional_id interno, quando aplicável
 ```
 
-```json
-{
-  "event_id": "{{$json.event.id}}"
-}
+### Dados que não devem ir no Cal.com
+
+```text
+laudos
+exames completos
+diagnósticos
+documentos médicos
+histórico clínico detalhado
+dados sensíveis sem necessidade operacional
 ```
 
-## 5. O que cada evento faz agora
+Dados clínicos ficam no MyDataMed/HealthWallet, com autorização do paciente.
+
+## 6. O que cada evento faz agora
 
 ### care_link_approved
 
@@ -220,21 +274,49 @@ Quando o paciente revoga um vínculo no HealthWallet, a API Autopilot:
 3. Registra auditoria.
 4. Marca o evento como processado.
 
-## 6. Teste manual sem ativar o workflow
+### calendar_booking_created
 
-1. Rode `SQL_AUTOMATION_EVENTS_V1.sql` no Supabase.
-2. Configure `AUTOMATION_API_SECRET` no Netlify.
-3. Solicite vínculo em `/meus-pacientes`.
-4. Aprove no HealthWallet em `/care-links`.
-5. Verifique se apareceu evento `care_link_approved` em `automation_events`.
-6. No n8n, importe `mydatamed-autopilot-polling-v1.json`.
-7. Troque `CHANGE_ME_AUTOMATION_API_SECRET` pelo segredo real.
-8. Execute manualmente.
-9. Verifique se o evento virou `processed` e se tarefas foram criadas no CRM.
-10. Só depois ative o Schedule Trigger.
+Quando Cal.com cria um booking, a API Autopilot:
 
-## 7. Regra de produto
+1. Localiza o profissional por `professional_id` ou por `professional_calendar_integrations`.
+2. Cria uma linha em `telemedicine_appointments`.
+3. Registra evento em `telemedicine_events`.
+4. Cria tarefas de pré-consulta e lembrete.
+5. Prepara o fluxo para NextGen, SmartBots e Daily.
 
-O MyDataMed Autopilot coordena rotinas, lembretes, cobrança, documentos e preparação operacional. Ele não substitui decisão clínica do profissional habilitado.
+### calendar_booking_rescheduled
+
+Quando Cal.com reagenda, a API Autopilot:
+
+1. Localiza a teleconsulta pelo `calcom_booking_id`.
+2. Atualiza data, horário, duração e metadados.
+3. Registra auditoria.
+
+### calendar_booking_cancelled
+
+Quando Cal.com cancela, a API Autopilot:
+
+1. Localiza a teleconsulta pelo `calcom_booking_id`.
+2. Marca a teleconsulta como `cancelled`.
+3. Cancela tarefas pendentes vinculadas ao appointment.
+4. Registra auditoria.
+
+## 7. Teste manual sem ativar o workflow
+
+1. Rode os SQLs no Supabase.
+2. Configure `AUTOMATION_API_SECRET` e `CALCOM_WEBHOOK_SECRET` no Netlify.
+3. Configure o webhook no Cal.com apontando para `/api/integrations/calcom/webhook`.
+4. Crie um booking teste no Cal.com.
+5. Verifique se apareceu registro em `calcom_webhook_events`.
+6. Verifique se apareceu evento `calendar_booking_created` em `automation_events`.
+7. No n8n, importe `mydatamed-autopilot-polling-v1.json`.
+8. Troque `CHANGE_ME_AUTOMATION_API_SECRET` pelo segredo real.
+9. Execute manualmente.
+10. Verifique se o evento virou `processed` e se a teleconsulta foi criada.
+11. Só depois ative o Schedule Trigger.
+
+## 8. Regra de produto
+
+O MyDataMed Autopilot coordena rotinas, lembretes, cobrança, documentos, agenda e preparação operacional. Ele não substitui decisão clínica do profissional habilitado.
 
 Todos os fluxos devem respeitar consentimento, revogação e escopo autorizado pelo paciente.

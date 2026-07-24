@@ -20,6 +20,37 @@ function addDays(days: number) {
   return date.toISOString()
 }
 
+function safeJson(value: any) {
+  return value && typeof value === 'object' ? value : {}
+}
+
+function datePart(value: any) {
+  const text = String(value || '')
+  const match = text.match(/^(\d{4}-\d{2}-\d{2})/)
+  return match?.[1] || null
+}
+
+function timePart(value: any) {
+  const text = String(value || '')
+  const match = text.match(/T(\d{2}:\d{2})/)
+  return match?.[1] || null
+}
+
+function bookingFromEvent(event: any) {
+  const payload = safeJson(event.payload)
+  const booking = payload.normalized_booking || payload.booking || payload
+  const startTime = booking.start_time || booking.startTime || booking.start || null
+
+  return {
+    ...booking,
+    external_booking_id: booking.external_booking_id || booking.uid || booking.id || event.source_id || null,
+    preferred_date: booking.preferred_date || datePart(startTime),
+    preferred_time: booking.preferred_time || timePart(startTime),
+    duration_minutes: Number(booking.duration_minutes || booking.duration || 30),
+    start_time: startTime,
+  }
+}
+
 async function loadEvent(supabase: ReturnType<typeof getSupabaseAdmin>, body: any) {
   if (body.event?.id) return body.event
   if (!body.event_id) throw new Error('event_id obrigatório')
@@ -92,6 +123,26 @@ async function logCareLinkEvent(supabase: ReturnType<typeof getSupabaseAdmin>, c
   })
 }
 
+async function logTelemedicineEvent(supabase: ReturnType<typeof getSupabaseAdmin>, appointment: any, professional: any, type: string, description: string, metadata: any = {}) {
+  if (!appointment?.id) return
+  try {
+    await supabase.from('telemedicine_events').insert({
+      appointment_id: appointment.id,
+      actor_user_id: professional?.user_id || appointment.professional_user_id || null,
+      professional_id: appointment.professional_id || professional?.id || null,
+      patient_id: appointment.patient_id || appointment.user_id || null,
+      type,
+      description,
+      metadata: {
+        source: 'mydatamed-autopilot',
+        ...metadata,
+      },
+    })
+  } catch {
+    // Não trava o processamento caso a tabela de eventos ainda não exista.
+  }
+}
+
 async function createTaskOnce(supabase: ReturnType<typeof getSupabaseAdmin>, careLink: any, template: any) {
   const autopilotType = template.autopilot_type
 
@@ -133,6 +184,141 @@ async function createTaskOnce(supabase: ReturnType<typeof getSupabaseAdmin>, car
 
   if (error) throw error
   return data
+}
+
+async function createAppointmentTaskOnce(supabase: ReturnType<typeof getSupabaseAdmin>, professional: any, appointment: any, template: any) {
+  if (!professional?.user_id) return { skipped: true, reason: 'professional_user_id ausente' }
+
+  const autopilotType = template.autopilot_type
+  const { data: existing } = await supabase
+    .from('professional_crm_tasks')
+    .select('id')
+    .eq('professional_user_id', professional.user_id)
+    .eq('appointment_id', appointment.id)
+    .contains('metadata', { autopilot_type: autopilotType })
+    .limit(1)
+    .maybeSingle()
+
+  if (existing?.id) return { id: existing.id, skipped: true }
+
+  const { data, error } = await supabase
+    .from('professional_crm_tasks')
+    .insert({
+      professional_user_id: professional.user_id,
+      patient_id: appointment.patient_id || appointment.user_id || null,
+      appointment_id: appointment.id,
+      task_type: template.task_type,
+      title: template.title,
+      description: template.description,
+      channel: template.channel || 'manual',
+      message_template: template.message_template || template.description,
+      status: 'pending',
+      due_at: template.due_at,
+      metadata: {
+        source: 'mydatamed-autopilot-calendar',
+        powered_by: 'Cal.com + n8n + SmartBots + Staff',
+        appointment_id: appointment.id,
+        calcom_booking_id: appointment.calcom_booking_id || null,
+        professional_id: professional.id,
+        patient_name: appointment.patient_name || null,
+        patient_email: appointment.patient_email || null,
+        autopilot_type: autopilotType,
+        n8n_ready: true,
+      },
+    })
+    .select('*')
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+async function upsertCrmContact(supabase: ReturnType<typeof getSupabaseAdmin>, professional: any, appointment: any) {
+  if (!professional?.user_id || !appointment?.patient_id) return
+
+  try {
+    const { data: existing } = await supabase
+      .from('professional_crm_contacts')
+      .select('id')
+      .eq('professional_user_id', professional.user_id)
+      .eq('patient_id', appointment.patient_id)
+      .maybeSingle()
+
+    if (existing?.id) {
+      await supabase
+        .from('professional_crm_contacts')
+        .update({
+          patient_name: appointment.patient_name || null,
+          patient_email: appointment.patient_email || null,
+          lifecycle_stage: 'patient',
+          last_contact_at: new Date().toISOString(),
+          metadata: {
+            source: 'calcom-autopilot',
+            last_appointment_id: appointment.id,
+            calcom_booking_id: appointment.calcom_booking_id || null,
+          },
+        })
+        .eq('id', existing.id)
+      return
+    }
+
+    await supabase.from('professional_crm_contacts').insert({
+      professional_user_id: professional.user_id,
+      patient_id: appointment.patient_id,
+      patient_name: appointment.patient_name || null,
+      patient_email: appointment.patient_email || null,
+      source: 'calcom',
+      lifecycle_stage: 'patient',
+      last_contact_at: new Date().toISOString(),
+      metadata: {
+        appointment_id: appointment.id,
+        calcom_booking_id: appointment.calcom_booking_id || null,
+      },
+    })
+  } catch {
+    // CRM pode ainda não estar ativado no Supabase.
+  }
+}
+
+async function loadProfessionalForBooking(supabase: ReturnType<typeof getSupabaseAdmin>, event: any, booking: any) {
+  const professionalId = event.professional_id || booking.professional_id || booking.metadata?.professional_id
+
+  if (professionalId) {
+    const { data, error } = await supabase
+      .from('professionals')
+      .select('*')
+      .eq('id', professionalId)
+      .maybeSingle()
+    if (error) throw error
+    if (data) return data
+  }
+
+  const email = booking.professional_email || booking.organizer_email
+  const username = booking.professional_username
+
+  if (email || username) {
+    let query = supabase
+      .from('professional_calendar_integrations')
+      .select('*')
+      .eq('provider', booking.provider || 'calcom')
+      .eq('status', 'active')
+      .limit(1)
+
+    if (email) query = query.eq('external_user_email', String(email).toLowerCase())
+    else query = query.eq('external_username', username)
+
+    const { data: integration } = await query.maybeSingle()
+    if (integration?.professional_id) {
+      const { data } = await supabase
+        .from('professionals')
+        .select('*')
+        .eq('id', integration.professional_id)
+        .maybeSingle()
+      if (data) return data
+    }
+  }
+
+  return null
 }
 
 async function processCareLinkApproved(supabase: ReturnType<typeof getSupabaseAdmin>, event: any) {
@@ -280,6 +466,219 @@ async function processCareLinkRevoked(supabase: ReturnType<typeof getSupabaseAdm
   }
 }
 
+async function findAppointmentByBooking(supabase: ReturnType<typeof getSupabaseAdmin>, bookingId: string) {
+  if (!bookingId) return null
+  const { data, error } = await supabase
+    .from('telemedicine_appointments')
+    .select('*')
+    .eq('calcom_booking_id', bookingId)
+    .maybeSingle()
+
+  if (error) throw error
+  return data
+}
+
+function buildAppointmentPayload(booking: any, professional: any) {
+  if (!booking.external_booking_id) throw new Error('external_booking_id ausente no booking')
+  if (!booking.preferred_date || !booking.preferred_time) throw new Error('Data ou horário ausente no booking Cal.com')
+
+  const scheduledAt = booking.start_time || `${booking.preferred_date}T${booking.preferred_time}:00`
+  const location = typeof booking.location === 'string' ? booking.location : ''
+  const videoUrl = location.startsWith('http') ? location : null
+
+  return {
+    user_id: booking.patient_id || null,
+    patient_id: booking.patient_id || null,
+    patient_name: booking.patient_name || null,
+    patient_email: booking.patient_email || null,
+    professional_id: professional.id,
+    professional_name: professional.full_name || professional.name || 'Profissional MyDataMed',
+    professional_email: booking.professional_email || null,
+    specialty: booking.specialty || professional.specialty || booking.title || 'Consulta',
+    reason: booking.reason || booking.title || 'Agendamento via Cal.com',
+    preferred_date: booking.preferred_date,
+    preferred_time: booking.preferred_time,
+    scheduled_at: scheduledAt,
+    duration_minutes: Number(booking.duration_minutes || 30),
+    status: 'scheduled',
+    provider: 'calcom',
+    room_url: videoUrl,
+    meet_url: videoUrl,
+    professional_confirmed: true,
+    professional_confirmed_at: new Date().toISOString(),
+    shared_data_permissions: {
+      summary: true,
+      exams: true,
+      medications: true,
+      timeline: true,
+      passport: true,
+      medscore: true,
+    },
+    payment_status: 'not_required',
+    payment_required: false,
+    billing_metadata: {
+      source: 'calcom',
+      nextgen_ready: true,
+      charge_policy: 'manual_or_plan',
+    },
+    calendar_provider: booking.provider || 'calcom',
+    calcom_booking_id: booking.external_booking_id,
+    external_booking_url: booking.booking_url || null,
+    external_reschedule_url: booking.reschedule_url || null,
+    external_cancel_url: booking.cancel_url || null,
+    calendar_metadata: {
+      source: 'calcom-webhook',
+      provider: booking.provider || 'calcom',
+      raw_start_time: booking.start_time || null,
+      raw_end_time: booking.end_time || null,
+      timezone: booking.timezone || null,
+      metadata: booking.metadata || {},
+    },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }
+}
+
+async function processCalendarBookingCreated(supabase: ReturnType<typeof getSupabaseAdmin>, event: any) {
+  const booking = bookingFromEvent(event)
+  const existing = await findAppointmentByBooking(supabase, booking.external_booking_id)
+  if (existing?.id) {
+    return { skipped: true, reason: 'Teleconsulta já existe para esse booking.', appointment_id: existing.id, calcom_booking_id: booking.external_booking_id }
+  }
+
+  const professional = await loadProfessionalForBooking(supabase, event, booking)
+  if (!professional?.id) {
+    return {
+      skipped: true,
+      reason: 'Profissional não encontrado. Envie professional_id no metadata do Cal.com ou cadastre professional_calendar_integrations.',
+      professional_email: booking.professional_email || null,
+      professional_username: booking.professional_username || null,
+    }
+  }
+
+  const appointmentPayload = buildAppointmentPayload(booking, professional)
+  const { data: appointment, error } = await supabase
+    .from('telemedicine_appointments')
+    .insert(appointmentPayload)
+    .select('*')
+    .single()
+
+  if (error) throw new Error(`${error.message}. Rode SQL_CALCOM_AGENDA_V1.sql e os SQLs de teleconsulta.`)
+
+  await logTelemedicineEvent(supabase, appointment, professional, 'calendar_booking_created', 'Cal.com criou agendamento e Autopilot gerou teleconsulta MyDataMed.', { booking })
+  await upsertCrmContact(supabase, professional, appointment)
+
+  const tasks = [
+    {
+      autopilot_type: 'calendar_pre_consultation',
+      task_type: 'pre_consultation',
+      title: 'Preparar consulta agendada via Cal.com',
+      description: 'Revisar paciente, dados autorizados, motivo da consulta e pendências antes da teleconsulta.',
+      due_at: booking.start_time || `${booking.preferred_date}T${booking.preferred_time}:00`,
+    },
+    {
+      autopilot_type: 'calendar_reminder',
+      task_type: 'reminder',
+      title: 'Enviar lembrete da consulta agendada',
+      description: `Lembrar ${appointment.patient_name || 'paciente'} sobre a consulta ${appointment.specialty || ''} em ${appointment.preferred_date} às ${String(appointment.preferred_time).slice(0, 5)}.`,
+      due_at: booking.start_time ? new Date(new Date(booking.start_time).getTime() - 24 * 60 * 60 * 1000).toISOString() : addDays(0),
+    },
+  ]
+
+  const createdTasks = []
+  for (const task of tasks) createdTasks.push(await createAppointmentTaskOnce(supabase, professional, appointment, task))
+
+  return {
+    appointment_id: appointment.id,
+    calcom_booking_id: booking.external_booking_id,
+    professional_id: professional.id,
+    patient_id: appointment.patient_id || null,
+    created_or_existing_tasks: createdTasks.map((task: any) => ({ id: task.id, skipped: Boolean(task.skipped) })),
+  }
+}
+
+async function processCalendarBookingRescheduled(supabase: ReturnType<typeof getSupabaseAdmin>, event: any) {
+  const booking = bookingFromEvent(event)
+  const appointment = await findAppointmentByBooking(supabase, booking.external_booking_id)
+  if (!appointment?.id) return { skipped: true, reason: 'Teleconsulta não encontrada para reagendamento.', calcom_booking_id: booking.external_booking_id }
+
+  const professional = await loadProfessionalForBooking(supabase, event, booking)
+  const updates: any = {
+    preferred_date: booking.preferred_date || appointment.preferred_date,
+    preferred_time: booking.preferred_time || appointment.preferred_time,
+    scheduled_at: booking.start_time || appointment.scheduled_at,
+    duration_minutes: Number(booking.duration_minutes || appointment.duration_minutes || 30),
+    status: 'scheduled',
+    external_booking_url: booking.booking_url || appointment.external_booking_url || null,
+    external_reschedule_url: booking.reschedule_url || appointment.external_reschedule_url || null,
+    external_cancel_url: booking.cancel_url || appointment.external_cancel_url || null,
+    calendar_metadata: {
+      ...(appointment.calendar_metadata || {}),
+      rescheduled_at: new Date().toISOString(),
+      raw_start_time: booking.start_time || null,
+      raw_end_time: booking.end_time || null,
+      metadata: booking.metadata || {},
+    },
+    updated_at: new Date().toISOString(),
+  }
+
+  const { data: updated, error } = await supabase
+    .from('telemedicine_appointments')
+    .update(updates)
+    .eq('id', appointment.id)
+    .select('*')
+    .single()
+
+  if (error) throw error
+
+  await logTelemedicineEvent(supabase, updated, professional, 'calendar_booking_rescheduled', 'Cal.com reagendou teleconsulta.', { booking })
+
+  return { appointment_id: updated.id, calcom_booking_id: booking.external_booking_id, status: updated.status, preferred_date: updated.preferred_date, preferred_time: updated.preferred_time }
+}
+
+async function processCalendarBookingCancelled(supabase: ReturnType<typeof getSupabaseAdmin>, event: any) {
+  const booking = bookingFromEvent(event)
+  const appointment = await findAppointmentByBooking(supabase, booking.external_booking_id)
+  if (!appointment?.id) return { skipped: true, reason: 'Teleconsulta não encontrada para cancelamento.', calcom_booking_id: booking.external_booking_id }
+
+  const { data: updated, error } = await supabase
+    .from('telemedicine_appointments')
+    .update({
+      status: 'cancelled',
+      cancelled_at: new Date().toISOString(),
+      calendar_metadata: {
+        ...(appointment.calendar_metadata || {}),
+        cancelled_by_calendar: true,
+        cancelled_at: new Date().toISOString(),
+        cancel_reason: booking.reason || null,
+      },
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', appointment.id)
+    .select('*')
+    .single()
+
+  if (error) throw error
+
+  const { data: pendingTasks } = await supabase
+    .from('professional_crm_tasks')
+    .select('id')
+    .eq('appointment_id', appointment.id)
+    .eq('status', 'pending')
+
+  const taskIds = (pendingTasks || []).map((task: any) => task.id)
+  if (taskIds.length > 0) {
+    await supabase
+      .from('professional_crm_tasks')
+      .update({ status: 'cancelled', updated_at: new Date().toISOString(), metadata: { source: 'calendar_cancelled', appointment_id: appointment.id } })
+      .in('id', taskIds)
+  }
+
+  await logTelemedicineEvent(supabase, updated, null, 'calendar_booking_cancelled', 'Cal.com cancelou teleconsulta e Autopilot interrompeu tarefas pendentes.', { booking, cancelled_task_ids: taskIds })
+
+  return { appointment_id: updated.id, calcom_booking_id: booking.external_booking_id, cancelled_task_count: taskIds.length }
+}
+
 async function processEvent(supabase: ReturnType<typeof getSupabaseAdmin>, event: any) {
   switch (event.event_type) {
     case 'care_link_approved':
@@ -288,6 +687,13 @@ async function processEvent(supabase: ReturnType<typeof getSupabaseAdmin>, event
       return processSmartBotsTaskCreated(supabase, event)
     case 'care_link_revoked':
       return processCareLinkRevoked(supabase, event)
+    case 'calendar_booking_created':
+      return processCalendarBookingCreated(supabase, event)
+    case 'calendar_booking_rescheduled':
+      return processCalendarBookingRescheduled(supabase, event)
+    case 'calendar_booking_cancelled':
+    case 'calendar_booking_canceled':
+      return processCalendarBookingCancelled(supabase, event)
     default:
       return { skipped: true, reason: `Evento ${event.event_type} ainda não possui processador Autopilot.` }
   }

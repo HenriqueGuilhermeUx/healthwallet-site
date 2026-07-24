@@ -7,10 +7,7 @@
       "name": "Rodar manualmente",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [
-        -720,
-        80
-      ]
+      "position": [-720, 80]
     },
     {
       "parameters": {
@@ -27,10 +24,7 @@
       "name": "A cada 5 minutos",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.2,
-      "position": [
-        -720,
-        -120
-      ]
+      "position": [-720, -120]
     },
     {
       "parameters": {
@@ -50,23 +44,17 @@
       "name": "Buscar eventos pendentes",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        -460,
-        -20
-      ]
+      "position": [-460, -20]
     },
     {
       "parameters": {
-        "jsCode": "const supported = new Set(['care_link_approved', 'smartbots_task_created', 'care_link_revoked']);\nconst events = Array.isArray($json.events) ? $json.events : [];\nreturn events\n  .filter((event) => supported.has(event.event_type))\n  .map((event) => ({ json: { event } }));"
+        "jsCode": "const supported = new Set([\n  'care_link_approved',\n  'smartbots_task_created',\n  'care_link_revoked',\n  'calendar_booking_created',\n  'calendar_booking_rescheduled',\n  'calendar_booking_cancelled',\n  'calendar_booking_canceled',\n]);\nconst events = Array.isArray($json.events) ? $json.events : [];\nreturn events\n  .filter((event) => supported.has(event.event_type))\n  .map((event) => ({ json: { event } }));"
       },
       "id": "normalize-events",
       "name": "Filtrar eventos suportados",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        -200,
-        -20
-      ]
+      "position": [-200, -20]
     },
     {
       "parameters": {
@@ -96,10 +84,7 @@
       "name": "Processar evento no MyDataMed",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [
-        80,
-        -20
-      ]
+      "position": [80, -20]
     },
     {
       "parameters": {
@@ -109,68 +94,25 @@
       "name": "Resumo da execução",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [
-        360,
-        -20
-      ]
+      "position": [360, -20]
     }
   ],
   "pinData": {},
   "connections": {
     "Rodar manualmente": {
-      "main": [
-        [
-          {
-            "node": "Buscar eventos pendentes",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Buscar eventos pendentes", "type": "main", "index": 0}]]
     },
     "A cada 5 minutos": {
-      "main": [
-        [
-          {
-            "node": "Buscar eventos pendentes",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Buscar eventos pendentes", "type": "main", "index": 0}]]
     },
     "Buscar eventos pendentes": {
-      "main": [
-        [
-          {
-            "node": "Filtrar eventos suportados",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Filtrar eventos suportados", "type": "main", "index": 0}]]
     },
     "Filtrar eventos suportados": {
-      "main": [
-        [
-          {
-            "node": "Processar evento no MyDataMed",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Processar evento no MyDataMed", "type": "main", "index": 0}]]
     },
     "Processar evento no MyDataMed": {
-      "main": [
-        [
-          {
-            "node": "Resumo da execução",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
+      "main": [[{"node": "Resumo da execução", "type": "main", "index": 0}]]
     }
   },
   "active": false,
@@ -183,14 +125,9 @@
   },
   "id": "mydatamed-autopilot-polling-v1",
   "tags": [
-    {
-      "name": "MyDataMed"
-    },
-    {
-      "name": "Autopilot"
-    },
-    {
-      "name": "HealthWallet"
-    }
+    { "name": "MyDataMed" },
+    { "name": "Autopilot" },
+    { "name": "HealthWallet" },
+    { "name": "Cal.com" }
   ]
 }

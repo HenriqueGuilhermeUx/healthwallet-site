@@ -20,8 +20,7 @@ CREATE TABLE IF NOT EXISTS public.professional_calendar_integrations (
   webhook_secret_hint TEXT,
   metadata JSONB DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
-  updated_at TIMESTAMPTZ DEFAULT NOW(),
-  UNIQUE (professional_user_id, provider, COALESCE(external_user_email, ''), COALESCE(external_username, ''))
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 ALTER TABLE public.professional_calendar_integrations ENABLE ROW LEVEL SECURITY;
@@ -32,6 +31,14 @@ ON public.professional_calendar_integrations
 FOR ALL
 USING (auth.uid() = professional_user_id)
 WITH CHECK (auth.uid() = professional_user_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_calendar_integrations_unique_external
+ON public.professional_calendar_integrations (
+  professional_user_id,
+  provider,
+  COALESCE(external_user_email, ''),
+  COALESCE(external_username, '')
+);
 
 CREATE INDEX IF NOT EXISTS idx_calendar_integrations_professional_user
 ON public.professional_calendar_integrations (professional_user_id, provider, status);

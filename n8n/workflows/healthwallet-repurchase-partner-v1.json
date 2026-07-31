@@ -1,0 +1,162 @@
+{
+  "name": "HealthWallet Reposição - Parceiro Farmácia V1",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Rodar manualmente",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [0, 0]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "A cada 10 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 180]
+    },
+    {
+      "parameters": {
+        "url": "https://mydatamed.com/api/automation/event?status=pending&limit=30",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-automation-secret",
+              "value": "CHANGE_ME_AUTOMATION_API_SECRET"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "get-pending-events",
+      "name": "Buscar eventos pendentes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [260, 90]
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "events",
+        "options": {}
+      },
+      "id": "split-events",
+      "name": "Separar eventos",
+      "type": "n8n-nodes-base.splitOut",
+      "typeVersion": 1,
+      "position": [500, 90]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "event-type-condition",
+              "leftValue": "={{ $json.event_type }}",
+              "rightValue": "medication_repurchase_requested",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "filter-repurchase",
+      "name": "Filtrar reposição",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [720, 90]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "CHANGE_ME_PARTNER_PHARMACY_WEBHOOK_URL",
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { event_id: $json.id, patient_user_id: $json.patient_user_id, repurchase_request_id: $json.payload?.repurchase_request_id, medication_name: $json.payload?.medication_name, dosage: $json.payload?.dosage, frequency: $json.payload?.frequency, estimated_stock_days: $json.payload?.estimated_stock_days, target_name: $json.payload?.target_name, consent_snapshot: $json.payload?.consent_snapshot, source: 'healthwallet_repurchase' } }}",
+        "options": {}
+      },
+      "id": "send-partner",
+      "name": "Enviar para parceiro/farmácia",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [980, 20]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "https://mydatamed.com/api/automation/event",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-automation-secret",
+              "value": "CHANGE_ME_AUTOMATION_API_SECRET"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "jsonBody": "={{ { event_id: $('Filtrar reposição').item.json.id, status: 'processed', metadata: { workflow: 'healthwallet_repurchase_partner_v1', partner_response: $json } } }}",
+        "options": {}
+      },
+      "id": "mark-processed",
+      "name": "Marcar evento processado",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1240, 20]
+    },
+    {
+      "parameters": {
+        "jsCode": "return [{ json: { ignored: true, reason: 'Evento não é medication_repurchase_requested', event_type: $json.event_type } }];"
+      },
+      "id": "ignored",
+      "name": "Ignorado",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [980, 180]
+    }
+  ],
+  "connections": {
+    "Rodar manualmente": {
+      "main": [[{"node": "Buscar eventos pendentes", "type": "main", "index": 0}]]
+    },
+    "A cada 10 minutos": {
+      "main": [[{"node": "Buscar eventos pendentes", "type": "main", "index": 0}]]
+    },
+    "Buscar eventos pendentes": {
+      "main": [[{"node": "Separar eventos", "type": "main", "index": 0}]]
+    },
+    "Separar eventos": {
+      "main": [[{"node": "Filtrar reposição", "type": "main", "index": 0}]]
+    },
+    "Filtrar reposição": {
+      "main": [[{"node": "Enviar para parceiro/farmácia", "type": "main", "index": 0}], [{"node": "Ignorado", "type": "main", "index": 0}]]
+    },
+    "Enviar para parceiro/farmácia": {
+      "main": [[{"node": "Marcar evento processado", "type": "main", "index": 0}]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

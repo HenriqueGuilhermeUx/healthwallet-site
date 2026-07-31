@@ -114,9 +114,10 @@ export async function POST(req: NextRequest) {
     if (appointmentError || !appointment) return NextResponse.json({ error: 'Teleconsulta não encontrada' }, { status: 404 })
     if (appointment.professional_id && appointment.professional_id !== professional.id) return NextResponse.json({ error: 'Sem permissão para esta teleconsulta' }, { status: 403 })
 
+    const patientId = appointment.patient_id || appointment.user_id || null
     const rows = items.map((item: any) => ({
       appointment_id: appointmentId,
-      patient_id: appointment.patient_id || appointment.user_id || null,
+      patient_id: patientId,
       professional_id: professional.id,
       professional_user_id: user.id,
       ...item,
@@ -126,6 +127,13 @@ export async function POST(req: NextRequest) {
         ean_first: Boolean(item.ean_code),
       },
     }))
+
+    // Idempotente: substituir os itens da receita desta teleconsulta, evitando duplicidade ao salvar/concluir mais de uma vez.
+    await supabase
+      .from('telemedicine_prescription_items')
+      .delete()
+      .eq('appointment_id', appointmentId)
+      .eq('professional_user_id', user.id)
 
     const { data: inserted, error: insertError } = await supabase
       .from('telemedicine_prescription_items')
@@ -165,7 +173,7 @@ export async function POST(req: NextRequest) {
         appointment_id: appointmentId,
         actor_user_id: user.id,
         professional_id: professional.id,
-        patient_id: appointment.patient_id || appointment.user_id || null,
+        patient_id: patientId,
         type: 'structured_prescription_saved',
         description: 'Profissional salvou receita estruturada preparada para cofre e cotação com farmácia parceira.',
         metadata: prescriptionMetadata,
@@ -176,13 +184,13 @@ export async function POST(req: NextRequest) {
       event_type: 'telemedicine_prescription_created',
       source_id: appointmentId,
       actor_user_id: user.id,
-      patient_id: appointment.patient_id || appointment.user_id || null,
+      patient_id: patientId,
       professional_id: professional.id,
       appointment_id: appointmentId,
       priority: 4,
       payload: {
         appointment_id: appointmentId,
-        patient_id: appointment.patient_id || appointment.user_id || null,
+        patient_id: patientId,
         patient_name: appointment.patient_name || null,
         professional_name: professional.full_name || null,
         prescription_items: items,

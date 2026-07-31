@@ -160,15 +160,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: `${updateError.message}. Rode SQL_TELECONSULTA_RECEITA_FARMACIA_V1.sql.` }, { status: 500 })
     }
 
-    await supabase.from('telemedicine_events').insert({
-      appointment_id: appointmentId,
-      actor_user_id: user.id,
-      professional_id: professional.id,
-      patient_id: appointment.patient_id || appointment.user_id || null,
-      type: 'structured_prescription_saved',
-      description: 'Profissional salvou receita estruturada preparada para cofre e cotação com farmácia parceira.',
-      metadata: prescriptionMetadata,
-    }).catch(() => null)
+    try {
+      await supabase.from('telemedicine_events').insert({
+        appointment_id: appointmentId,
+        actor_user_id: user.id,
+        professional_id: professional.id,
+        patient_id: appointment.patient_id || appointment.user_id || null,
+        type: 'structured_prescription_saved',
+        description: 'Profissional salvou receita estruturada preparada para cofre e cotação com farmácia parceira.',
+        metadata: prescriptionMetadata,
+      })
+    } catch {}
 
     await emitAutomationEvent(supabase, {
       event_type: 'telemedicine_prescription_created',

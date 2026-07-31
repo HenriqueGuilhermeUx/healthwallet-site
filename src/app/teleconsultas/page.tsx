@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import {
+  Barcode,
   Bell,
   CalendarDays,
   CheckCircle,
@@ -17,12 +18,14 @@ import {
   Loader2,
   Mail,
   MessageCircle,
+  Pill,
   PlayCircle,
   Plus,
   ReceiptText,
   ShieldCheck,
   Sparkles,
   StopCircle,
+  Trash2,
   User,
   Video,
   Wallet,
@@ -39,6 +42,20 @@ const DEFAULT_PERMISSIONS = {
 }
 
 const emptyNotes = { orientation: '', prescription: '', professional: '' }
+const emptyPrescriptionItem = {
+  medication_name: '',
+  ean_code: '',
+  active_ingredient: '',
+  standardized_dosage: '',
+  pharmaceutical_form: '',
+  manufacturer: '',
+  quantity: '',
+  instructions: '',
+  duration: '',
+  substitution_allowed: false,
+}
+
+type PrescriptionItem = typeof emptyPrescriptionItem
 
 export default function TeleconsultasPage() {
   const { user, session, professional, loading: authLoading } = useAuth()
@@ -51,6 +68,7 @@ export default function TeleconsultasPage() {
   const [roomLinks, setRoomLinks] = useState<Record<string, string>>({})
   const [chargeAmounts, setChargeAmounts] = useState<Record<string, string>>({})
   const [notes, setNotes] = useState<Record<string, typeof emptyNotes>>({})
+  const [prescriptionDrafts, setPrescriptionDrafts] = useState<Record<string, PrescriptionItem[]>>({})
 
   const [form, setForm] = useState({
     patient_id: '',
@@ -95,6 +113,7 @@ export default function TeleconsultasPage() {
     const nextRoomLinks: Record<string, string> = {}
     const nextNotes: Record<string, typeof emptyNotes> = {}
     const nextChargeAmounts: Record<string, string> = {}
+    const nextPrescriptionDrafts: Record<string, PrescriptionItem[]> = {}
 
     rows.forEach((item) => {
       nextRoomLinks[item.id] = item.room_url || item.meet_url || ''
@@ -104,12 +123,15 @@ export default function TeleconsultasPage() {
         prescription: item.prescription_text || '',
         professional: item.professional_notes || '',
       }
+      const existingItems = Array.isArray(item.prescription_items) ? item.prescription_items : []
+      nextPrescriptionDrafts[item.id] = existingItems.length > 0 ? existingItems.map(normalizePrescriptionDraft) : [{ ...emptyPrescriptionItem }]
     })
 
     setAppointments(rows)
     setRoomLinks(nextRoomLinks)
     setNotes(nextNotes)
     setChargeAmounts(nextChargeAmounts)
+    setPrescriptionDrafts(nextPrescriptionDrafts)
     setLoading(false)
   }
 
@@ -303,7 +325,7 @@ export default function TeleconsultasPage() {
     if (error) {
       toast.error(error.message || 'Erro ao atualizar teleconsulta')
       setSavingId(null)
-      return
+      return false
     }
 
     await logEvent(item.id, type, description, item.patient_id || item.user_id, payload)
@@ -312,6 +334,7 @@ export default function TeleconsultasPage() {
     toast.success('Teleconsulta atualizada')
     setSavingId(null)
     load()
+    return true
   }
 
   async function confirmAppointment(item: any) {
@@ -430,12 +453,64 @@ export default function TeleconsultasPage() {
     }
   }
 
+  async function saveStructuredPrescription(item: any, silent = false) {
+    if (!session?.access_token) {
+      toast.error('Sessão expirada. Entre novamente.')
+      return false
+    }
+
+    const rawItems = prescriptionDrafts[item.id] || []
+    const cleanItems = rawItems
+      .map(normalizePrescriptionDraft)
+      .filter((row) => row.medication_name || row.ean_code || row.active_ingredient)
+
+    if (!cleanItems.length) {
+      if (!silent) toast.error('Inclua ao menos um item estruturado da receita')
+      return true
+    }
+
+    setSavingId(item.id)
+    const response = await fetch('/api/telemedicine/prescription-items', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+      body: JSON.stringify({ appointment_id: item.id, items: cleanItems }),
+    })
+
+    const payload = await response.json().catch(() => ({}))
+    setSavingId(null)
+
+    if (!response.ok) {
+      toast.error(payload.error || 'Erro ao salvar receita estruturada')
+      return false
+    }
+
+    const summary = cleanItems
+      .map((row) => [row.medication_name || row.active_ingredient, row.standardized_dosage, row.pharmaceutical_form, row.instructions].filter(Boolean).join(' · '))
+      .join('\n')
+
+    setNotes((current) => ({
+      ...current,
+      [item.id]: {
+        ...(current[item.id] || emptyNotes),
+        prescription: summary || current[item.id]?.prescription || '',
+      },
+    }))
+
+    if (!silent) toast.success('Receita estruturada salva e preparada para o HealthWallet')
+    load()
+    return true
+  }
+
   async function startAppointment(item: any) {
     await updateAppointment(item, { status: 'in_progress', started_at: new Date().toISOString() }, 'appointment_started', 'Profissional iniciou a teleconsulta.')
   }
 
   async function completeAppointment(item: any) {
+    const structuredOk = await saveStructuredPrescription(item, true)
+    if (!structuredOk) return
+
     const note = notes[item.id] || emptyNotes
+    const hasStructured = (prescriptionDrafts[item.id] || []).some((row) => row.medication_name || row.ean_code || row.active_ingredient)
 
     await updateAppointment(item, {
       status: 'completed',
@@ -443,8 +518,8 @@ export default function TeleconsultasPage() {
       orientation_text: note.orientation || item.orientation_text || null,
       prescription_text: note.prescription || item.prescription_text || null,
       professional_notes: note.professional || item.professional_notes || null,
-      prescription_sent_at: note.prescription ? new Date().toISOString() : item.prescription_sent_at || null,
-    }, 'appointment_completed', 'Profissional concluiu a teleconsulta e registrou orientações.')
+      prescription_sent_at: note.prescription || hasStructured ? new Date().toISOString() : item.prescription_sent_at || null,
+    }, 'appointment_completed', 'Profissional concluiu a teleconsulta e registrou orientações/receita estruturada.')
 
     await createCrmTask(item, 'post_consultation', 'Follow-up pós-consulta', `Olá, ${item.patient_name || 'paciente'}. Suas orientações da teleconsulta já estão disponíveis no HealthWallet.`)
   }
@@ -452,6 +527,30 @@ export default function TeleconsultasPage() {
   async function cancelAppointment(item: any) {
     if (!confirm('Cancelar esta teleconsulta?')) return
     await updateAppointment(item, { status: 'cancelled', cancelled_at: new Date().toISOString() }, 'appointment_cancelled', 'Profissional cancelou a teleconsulta.')
+  }
+
+  function updatePrescriptionDraft(appointmentId: string, index: number, patch: Partial<PrescriptionItem>) {
+    setPrescriptionDrafts((current) => {
+      const rows = current[appointmentId] || [{ ...emptyPrescriptionItem }]
+      return {
+        ...current,
+        [appointmentId]: rows.map((row, rowIndex) => rowIndex === index ? { ...row, ...patch } : row),
+      }
+    })
+  }
+
+  function addPrescriptionDraft(appointmentId: string) {
+    setPrescriptionDrafts((current) => ({
+      ...current,
+      [appointmentId]: [...(current[appointmentId] || []), { ...emptyPrescriptionItem }],
+    }))
+  }
+
+  function removePrescriptionDraft(appointmentId: string, index: number) {
+    setPrescriptionDrafts((current) => {
+      const rows = (current[appointmentId] || []).filter((_, rowIndex) => rowIndex !== index)
+      return { ...current, [appointmentId]: rows.length ? rows : [{ ...emptyPrescriptionItem }] }
+    })
   }
 
   const stats = useMemo(() => ({
@@ -471,7 +570,7 @@ export default function TeleconsultasPage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Teleconsultas</h1>
-          <p className="text-gray-600 mt-1">Daily premium, cobrança NextGen, dados autorizados, lembretes, documentos e CRM em um só lugar.</p>
+          <p className="text-gray-600 mt-1">Daily premium, cobrança NextGen, receita estruturada, dados autorizados, lembretes, documentos e CRM em um só lugar.</p>
         </div>
         <div className="flex flex-col sm:flex-row gap-2">
           <Link href="/planos" className="inline-flex items-center justify-center gap-2 rounded-xl border border-indigo-200 text-indigo-700 px-5 py-3 font-semibold hover:bg-indigo-50">
@@ -497,12 +596,12 @@ export default function TeleconsultasPage() {
       <div className="grid md:grid-cols-4 gap-3">
         <FeatureStrip icon={Sparkles} title="Daily premium" description="Gere sala privada direto no MyDataMed Pro." />
         <FeatureStrip icon={Wallet} title="Powered by NextGen" description="Cobre ao agendar ou em 1 clique." />
+        <FeatureStrip icon={FileText} title="Receita estruturada" description="EAN, substância, dose e forma já preparados para HealthWallet." />
         <FeatureStrip icon={MessageCircle} title="SmartBots CRM" description="Lembretes e follow-up preparados como tarefas." />
-        <FeatureStrip icon={FileText} title="DocWallet" description="Orientações, documentos e validações no fluxo." />
       </div>
 
       <section className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 text-sm text-emerald-900">
-        <strong>Fluxo conectado:</strong> agenda cria a teleconsulta, NextGen gera a cobrança, Woovi/Pix recebe o pagamento, SmartBots ajuda no lembrete e DocWallet organiza documentos e orientações.
+        <strong>Fluxo conectado:</strong> agenda cria a teleconsulta, NextGen gera a cobrança, Woovi/Pix recebe o pagamento, Daily realiza a chamada, receita estruturada vai para o HealthWallet e SmartBots ajuda no acompanhamento.
       </section>
 
       {showForm && (
@@ -576,6 +675,11 @@ export default function TeleconsultasPage() {
                 setChargeAmount={(value: string) => setChargeAmounts({ ...chargeAmounts, [item.id]: value })}
                 note={notes[item.id] || emptyNotes}
                 setNote={(value: any) => setNotes({ ...notes, [item.id]: value })}
+                prescriptionItems={prescriptionDrafts[item.id] || [{ ...emptyPrescriptionItem }]}
+                onPrescriptionChange={(index: number, patch: Partial<PrescriptionItem>) => updatePrescriptionDraft(item.id, index, patch)}
+                onAddPrescriptionItem={() => addPrescriptionDraft(item.id)}
+                onRemovePrescriptionItem={(index: number) => removePrescriptionDraft(item.id, index)}
+                onSavePrescription={() => saveStructuredPrescription(item)}
                 onConfirm={() => confirmAppointment(item)}
                 onCreateDaily={() => createDailyRoom(item)}
                 onCreateCharge={() => createNextGenCharge(item)}
@@ -595,13 +699,14 @@ export default function TeleconsultasPage() {
   )
 }
 
-function AppointmentCard({ item, saving, roomLink, setRoomLink, chargeAmount, setChargeAmount, note, setNote, onConfirm, onCreateDaily, onCreateCharge, onReminder, onCopyReminder, onStart, onComplete, onCancel }: any) {
+function AppointmentCard({ item, saving, roomLink, setRoomLink, chargeAmount, setChargeAmount, note, setNote, prescriptionItems, onPrescriptionChange, onAddPrescriptionItem, onRemovePrescriptionItem, onSavePrescription, onConfirm, onCreateDaily, onCreateCharge, onReminder, onCopyReminder, onStart, onComplete, onCancel }: any) {
   const status = translateStatus(item.status)
   const joinUrl = item.room_url || item.meet_url || roomLink
   const isUnassigned = !item.professional_id
   const isDaily = item.provider === 'daily' || String(joinUrl || '').includes('daily.co')
   const hasCharge = Boolean(item.payment_charge_id || item.payment_required)
   const paid = item.payment_status === 'paid'
+  const hasStructuredPrescription = Array.isArray(item.prescription_items) && item.prescription_items.length > 0
 
   return (
     <div className="border border-gray-100 rounded-2xl p-4 bg-gray-50/60">
@@ -618,6 +723,7 @@ function AppointmentCard({ item, saving, roomLink, setRoomLink, chargeAmount, se
                 {isDaily && <span className="text-xs rounded-full px-2 py-0.5 bg-emerald-100 text-emerald-700">Daily premium</span>}
                 {isUnassigned && <span className="text-xs rounded-full px-2 py-0.5 bg-yellow-100 text-yellow-700">Nova solicitação</span>}
                 {hasCharge && <span className={`text-xs rounded-full px-2 py-0.5 ${paid ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>Pgto: {item.payment_status || 'pendente'}</span>}
+                {hasStructuredPrescription && <span className="text-xs rounded-full px-2 py-0.5 bg-blue-100 text-blue-700">Receita estruturada</span>}
               </div>
               <p className="text-sm text-gray-600 mt-1 flex items-center gap-1"><CalendarDays className="w-4 h-4" />{formatDate(item.preferred_date)} {item.preferred_time ? `às ${String(item.preferred_time).slice(0, 5)}` : ''} • {item.duration_minutes || 30} min</p>
               <p className="text-sm text-gray-600 mt-1 flex items-center gap-1"><User className="w-4 h-4" />{item.patient_name || `Paciente ${String(item.patient_id || item.user_id || '').slice(0, 8)}`}</p>
@@ -674,10 +780,68 @@ function AppointmentCard({ item, saving, roomLink, setRoomLink, chargeAmount, se
 
       <div className="grid md:grid-cols-3 gap-3 mt-4">
         <TextArea label="Orientações ao paciente" value={note.orientation} onChange={(value: string) => setNote({ ...note, orientation: value })} />
-        <TextArea label="Receita / prescrição" value={note.prescription} onChange={(value: string) => setNote({ ...note, prescription: value })} />
+        <TextArea label="Receita / prescrição em texto" value={note.prescription} onChange={(value: string) => setNote({ ...note, prescription: value })} />
         <TextArea label="Notas internas" value={note.professional} onChange={(value: string) => setNote({ ...note, professional: value })} />
       </div>
+
+      <StructuredPrescriptionEditor
+        items={prescriptionItems}
+        saving={saving}
+        onChange={onPrescriptionChange}
+        onAdd={onAddPrescriptionItem}
+        onRemove={onRemovePrescriptionItem}
+        onSave={onSavePrescription}
+      />
     </div>
+  )
+}
+
+function StructuredPrescriptionEditor({ items, saving, onChange, onAdd, onRemove, onSave }: any) {
+  return (
+    <section className="mt-4 rounded-2xl border border-blue-100 bg-blue-50/70 p-4 space-y-4">
+      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 text-blue-900"><Pill className="w-5 h-5" /><h3 className="font-bold">Receita estruturada para HealthWallet/Farmácia</h3></div>
+          <p className="text-xs text-blue-800 mt-1">Preencha EAN quando souber. Sem EAN, o sistema usa substância + dosagem + forma para busca/cotação. Não substitui assinatura/prescrição qualificada quando a lei exigir.</p>
+        </div>
+        <button type="button" onClick={onAdd} className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-700 px-3 py-2 text-sm font-semibold text-white"><Plus className="w-4 h-4" /> Item</button>
+      </div>
+
+      {items.map((item: PrescriptionItem, index: number) => {
+        const ifoodQuery = buildPharmacySearchQuery(item)
+        const ifoodUrl = ifoodQuery ? `https://www.ifood.com.br/busca?q=${encodeURIComponent(ifoodQuery)}` : ''
+        return (
+          <div key={index} className="rounded-2xl border bg-white p-4 space-y-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="font-semibold text-sm text-gray-900">Item {index + 1}</p>
+              <button type="button" onClick={() => onRemove(index)} className="inline-flex items-center gap-1 text-xs text-red-600"><Trash2 className="w-3 h-3" /> remover</button>
+            </div>
+            <div className="grid md:grid-cols-4 gap-3">
+              <Input label="Medicamento" value={item.medication_name} onChange={(value: string) => onChange(index, { medication_name: value })} placeholder="Ex: Losartana" />
+              <Input label="EAN / GTIN" value={item.ean_code} onChange={(value: string) => onChange(index, { ean_code: value })} placeholder="código de barras" />
+              <Input label="Substância ativa" value={item.active_ingredient} onChange={(value: string) => onChange(index, { active_ingredient: value })} placeholder="Ex: losartana potássica" />
+              <Input label="Dosagem" value={item.standardized_dosage} onChange={(value: string) => onChange(index, { standardized_dosage: value })} placeholder="Ex: 50 mg" />
+            </div>
+            <div className="grid md:grid-cols-4 gap-3">
+              <Input label="Forma" value={item.pharmaceutical_form} onChange={(value: string) => onChange(index, { pharmaceutical_form: value })} placeholder="comprimido, solução..." />
+              <Input label="Fabricante" value={item.manufacturer} onChange={(value: string) => onChange(index, { manufacturer: value })} placeholder="opcional" />
+              <Input label="Quantidade" value={item.quantity} onChange={(value: string) => onChange(index, { quantity: value })} placeholder="Ex: 30 cp" />
+              <Input label="Duração" value={item.duration} onChange={(value: string) => onChange(index, { duration: value })} placeholder="Ex: 30 dias" />
+            </div>
+            <TextArea label="Instruções / posologia" value={item.instructions} onChange={(value: string) => onChange(index, { instructions: value })} />
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 rounded-xl bg-gray-50 p-3 text-xs text-gray-600">
+              <span className="inline-flex items-center gap-1"><Barcode className="w-3 h-3" /> Busca teste: {ifoodQuery || 'preencha medicamento/substância'}</span>
+              {ifoodUrl && <a href={ifoodUrl} target="_blank" rel="noreferrer" className="inline-flex items-center justify-center gap-1 rounded-lg border px-2 py-1 font-semibold text-blue-700"><ExternalLink className="w-3 h-3" /> testar iFood</a>}
+            </div>
+          </div>
+        )
+      })}
+
+      <button type="button" disabled={saving} onClick={onSave} className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-blue-700 py-3 font-semibold text-white disabled:opacity-60">
+        {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
+        Salvar receita estruturada
+      </button>
+    </section>
   )
 }
 
@@ -690,7 +854,7 @@ function FeatureStrip({ icon: Icon, title, description }: any) {
 }
 
 function Input({ label, value, onChange, placeholder = '' }: any) {
-  return <div><label className="text-sm font-medium text-gray-700 mb-1 block">{label}</label><input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full px-3 py-2 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-emerald-500/20" /></div>
+  return <div><label className="text-sm font-medium text-gray-700 mb-1 block">{label}</label><input value={value || ''} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="w-full px-3 py-2 rounded-xl border border-gray-200 outline-none focus:ring-2 focus:ring-emerald-500/20" /></div>
 }
 
 function DateInput({ label, value, onChange }: any) {
@@ -702,7 +866,7 @@ function TimeInput({ label, value, onChange }: any) {
 }
 
 function TextArea({ label, value, onChange }: any) {
-  return <div><label className="text-sm font-medium text-gray-700 mb-1 block">{label}</label><textarea value={value} onChange={(e) => onChange(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-gray-200 min-h-[90px] text-sm" /></div>
+  return <div><label className="text-sm font-medium text-gray-700 mb-1 block">{label}</label><textarea value={value || ''} onChange={(e) => onChange(e.target.value)} className="w-full px-3 py-2 rounded-xl border border-gray-200 min-h-[90px] text-sm" /></div>
 }
 
 function MiniStatus({ icon: Icon, label, active }: any) {
@@ -724,6 +888,39 @@ function buildPaymentMessage(item: any, paymentUrl: string, pixCopyPaste: string
   const date = formatDate(item.preferred_date)
   const time = item.preferred_time ? String(item.preferred_time).slice(0, 5) : ''
   return `Olá, ${patientName}. Segue a cobrança da sua teleconsulta MyDataMed de R$ ${amount}. Consulta: ${date} ${time}.\n${paymentUrl ? `Link de pagamento: ${paymentUrl}` : ''}\n${pixCopyPaste ? `Pix copia e cola: ${pixCopyPaste}` : ''}`
+}
+
+function normalizePrescriptionDraft(item: any): PrescriptionItem {
+  return {
+    medication_name: normalizeText(item.medication_name || item.name || item.product_name),
+    ean_code: sanitizeEan(item.ean_code || item.ean || item.gtin || item.barcode),
+    active_ingredient: normalizeText(item.active_ingredient || item.substance || item.principio_ativo),
+    standardized_dosage: normalizeText(item.standardized_dosage || item.dosage || item.dose || item.concentration),
+    pharmaceutical_form: normalizeText(item.pharmaceutical_form || item.form || item.forma_farmaceutica),
+    manufacturer: normalizeText(item.manufacturer || item.laboratory || item.fabricante),
+    quantity: normalizeText(item.quantity || item.quantidade),
+    instructions: normalizeText(item.instructions || item.posology || item.posologia || item.orientacoes),
+    duration: normalizeText(item.duration || item.duracao),
+    substitution_allowed: Boolean(item.substitution_allowed || false),
+  }
+}
+
+function buildPharmacySearchQuery(item: Partial<PrescriptionItem>) {
+  return [
+    item.active_ingredient || item.medication_name,
+    item.standardized_dosage,
+    item.pharmaceutical_form,
+  ].map(normalizeText).filter(Boolean).join(' ')
+}
+
+function sanitizeEan(value: any) {
+  const digits = String(value || '').replace(/\D/g, '')
+  if (!digits) return ''
+  return digits.length >= 8 && digits.length <= 14 ? digits : ''
+}
+
+function normalizeText(value: any) {
+  return String(value || '').trim().replace(/\s+/g, ' ')
 }
 
 function translateStatus(status: string) {

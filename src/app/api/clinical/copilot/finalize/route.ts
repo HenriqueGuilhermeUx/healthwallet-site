@@ -17,13 +17,22 @@ function normalizeText(value: any) {
   return String(value || '').trim().replace(/\s+/g, ' ')
 }
 
-function buildFinalText(body: any) {
+function getSectionLabels(professionalType?: string) {
+  if (professionalType === 'nutricionista') return ['Relato/objetivo nutricional', 'Dados objetivos/rotina', 'Avaliação nutricional', 'Plano alimentar/orientações']
+  if (professionalType === 'fisioterapeuta') return ['Relato funcional', 'Avaliação objetiva funcional', 'Evolução/avaliação fisioterapêutica', 'Plano de exercícios/orientações']
+  if (['psicologo', 'terapeuta'].includes(professionalType || '')) return ['Relato da sessão', 'Observações/intervenções', 'Evolução terapêutica', 'Plano/próxima sessão']
+  if (professionalType === 'enfermeiro') return ['Relato/queixa', 'Triagem/dados objetivos', 'Avaliação de enfermagem', 'Orientações/encaminhamento']
+  return ['S - Subjetivo', 'O - Objetivo', 'A - Avaliação', 'P - Plano']
+}
+
+function buildFinalText(body: any, professionalType?: string) {
+  const labels = getSectionLabels(professionalType)
   const parts = [
-    ['S - Subjetivo', body.soap_subjective],
-    ['O - Objetivo', body.soap_objective],
-    ['A - Avaliação', body.soap_assessment],
-    ['P - Plano', body.soap_plan],
-    ['Observações do médico', body.doctor_observations],
+    [labels[0], body.soap_subjective],
+    [labels[1], body.soap_objective],
+    [labels[2], body.soap_assessment],
+    [labels[3], body.soap_plan],
+    ['Observações do profissional', body.doctor_observations],
   ]
   return parts
     .map(([title, value]) => `${title}\n${normalizeText(value) || 'Não informado.'}`)
@@ -53,6 +62,8 @@ export async function POST(req: NextRequest) {
 
     if (!professional) return NextResponse.json({ error: 'Cadastro profissional não encontrado' }, { status: 404 })
 
+    const professionalType = professional.professional_type || 'outro'
+
     const { data: visit, error: visitError } = await supabase
       .from('clinical_visits')
       .select('*')
@@ -62,7 +73,7 @@ export async function POST(req: NextRequest) {
 
     if (visitError || !visit) return NextResponse.json({ error: 'Atendimento não encontrado' }, { status: 404 })
 
-    const finalText = normalizeText(body.final_note) || buildFinalText(body)
+    const finalText = normalizeText(body.final_note) || buildFinalText(body, professionalType)
     const signed = Boolean(body.signed_by_doctor)
     const now = new Date().toISOString()
 
@@ -80,9 +91,11 @@ export async function POST(req: NextRequest) {
       signed_at: signed ? now : null,
       metadata: {
         ai_used_as_support: true,
-        doctor_review_required: true,
-        decision_owner: 'physician',
-        cfm_safe_wording: true,
+        professional_review_required: true,
+        decision_owner: 'health_professional',
+        professional_type: professionalType,
+        note_template: professional.consultation_template || professional.practice_preferences?.note_template || null,
+        scope_safe_wording: true,
       },
     }
 
@@ -109,8 +122,14 @@ export async function POST(req: NextRequest) {
       metadata: {
         ...(visit.metadata || {}),
         ai_used_as_support: true,
-        doctor_reviewed: true,
+        professional_reviewed: true,
         last_clinical_note_id: note.id,
+        professional_context: {
+          professional_type: professionalType,
+          specialty: professional.specialty || null,
+          verification_status: professional.verification_status || 'self_declared',
+          decision_owner: 'health_professional',
+        },
       },
     }
 
@@ -137,14 +156,15 @@ export async function POST(req: NextRequest) {
       tool_type: 'final_note_review_and_signature',
       model_provider: 'mydatamed_copilot_mvp',
       input_scope: visit.data_scope === 'healthwallet_authorized' ? 'authorized_patient_data_and_visit_transcript' : 'visit_transcript_only',
-      output_summary: signed ? 'Nota revisada e assinada pelo médico.' : 'Nota revisada e salva pelo médico.',
+      output_summary: signed ? 'Nota revisada e assinada pelo profissional.' : 'Nota revisada e salva pelo profissional.',
       reviewed_by_doctor: true,
       metadata: {
         professional_id: professional.id,
+        professional_type: professionalType,
         note_id: note.id,
         signed_by_doctor: signed,
         ai_is_support_tool: true,
-        decision_owner: 'physician',
+        decision_owner: 'health_professional',
       },
     })
 
@@ -155,12 +175,13 @@ export async function POST(req: NextRequest) {
         professional_id: professional.id,
         patient_id: visit.patient_user_id || null,
         type: 'clinical_copilot_finalized',
-        description: signed ? 'Médico revisou e assinou nota gerada com apoio de IA.' : 'Médico revisou e salvou nota gerada com apoio de IA.',
+        description: signed ? 'Profissional revisou e assinou nota gerada com apoio de IA.' : 'Profissional revisou e salvou nota gerada com apoio de IA.',
         metadata: {
           visit_id: visitId,
           note_id: note.id,
           ai_support_used: true,
-          reviewed_by_doctor: true,
+          reviewed_by_professional: true,
+          professional_type: professionalType,
         },
       })
     } catch {}

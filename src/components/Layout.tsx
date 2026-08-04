@@ -4,7 +4,7 @@ import { ReactNode } from 'react'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { Toaster } from 'sonner'
 import Link from 'next/link'
-import { Heart, LogOut, User, FileText, FileSearch } from "lucide-react"
+import { Heart, LogOut, User, FileText, FileSearch, SlidersHorizontal } from "lucide-react"
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 
@@ -38,6 +38,13 @@ export function Header() {
 
         {user && professional && (
           <div className="flex items-center gap-3">
+            <Link
+              href="/meu-jeito-atender"
+              className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 hover:text-violet-700 hover:bg-violet-50 rounded-lg transition-colors"
+            >
+              <SlidersHorizontal className="w-4 h-4" />
+              <span className="hidden sm:inline">Meu jeito</span>
+            </Link>
             {professional.professional_type === 'medico' && (
               <>
                 <Link

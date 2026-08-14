@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
@@ -54,7 +54,7 @@ const demoProfile = {
   sus_ubs_reference: '',
 }
 
-export default function CopilotoPage() {
+function CopilotoContent() {
   const { user, professional, loading: authLoading } = useAuth()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -312,6 +312,14 @@ export default function CopilotoPage() {
         </>
       )}
     </main>
+  )
+}
+
+export default function CopilotoPage() {
+  return (
+    <Suspense fallback={<div className="min-h-[60vh] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>}>
+      <CopilotoContent />
+    </Suspense>
   )
 }
 

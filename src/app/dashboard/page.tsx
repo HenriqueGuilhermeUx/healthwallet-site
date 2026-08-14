@@ -24,7 +24,6 @@ import {
   SlidersHorizontal,
   Sparkles,
   Stethoscope,
-  UserPlus,
   Users,
   Video,
 } from 'lucide-react'

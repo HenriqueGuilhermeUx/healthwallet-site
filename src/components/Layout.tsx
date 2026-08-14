@@ -4,7 +4,7 @@ import { ReactNode } from 'react'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { Toaster } from 'sonner'
 import Link from 'next/link'
-import { Heart, LogOut, User, FileText, FileSearch, SlidersHorizontal } from "lucide-react"
+import { Brain, BriefcaseBusiness, FileSearch, FileText, Heart, LogOut, ShieldCheck, SlidersHorizontal, User } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 
@@ -26,10 +26,12 @@ export function Header() {
     router.push('/login')
   }
 
+  const canShowRegulated = professional?.professional_type === 'medico'
+
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur">
-      <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between">
-        <Link href={user ? '/dashboard' : '/'} className="flex items-center gap-2">
+      <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
+        <Link href={user ? '/dashboard' : '/'} className="flex items-center gap-2 flex-shrink-0">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
             <Heart className="w-5 h-5 text-white" />
           </div>
@@ -37,43 +39,25 @@ export function Header() {
         </Link>
 
         {user && professional && (
-          <div className="flex items-center gap-3">
-            <Link
-              href="/meu-jeito-atender"
-              className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 hover:text-violet-700 hover:bg-violet-50 rounded-lg transition-colors"
-            >
-              <SlidersHorizontal className="w-4 h-4" />
-              <span className="hidden sm:inline">Meu jeito</span>
-            </Link>
-            {professional.professional_type === 'medico' && (
+          <div className="flex items-center gap-1 md:gap-2 overflow-x-auto">
+            <NavLink href="/consultorio" icon={BriefcaseBusiness} label="Consultório" tone="emerald" />
+            <NavLink href="/consulta-assistida" icon={Brain} label="Atendimento IA" tone="violet" />
+            <NavLink href="/meu-jeito-atender" icon={SlidersHorizontal} label="Meu jeito" tone="violet" />
+            <NavLink href="/lgpd-consultorio" icon={ShieldCheck} label="LGPD" tone="blue" />
+            {canShowRegulated && (
               <>
-                <Link
-                  href="/prescriptions"
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
-                >
-                  <FileText className="w-4 h-4" />
-                  <span className="hidden sm:inline">Receitas</span>
-                </Link>
-                <Link
-                  href="/exam-requests"
-                  className="flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 hover:text-sky-700 hover:bg-sky-50 rounded-lg transition-colors"
-                >
-                  <FileSearch className="w-4 h-4" />
-                  <span className="hidden sm:inline">Pedidos</span>
-                </Link>
+                <NavLink href="/prescriptions" icon={FileText} label="Receitas" tone="emerald" />
+                <NavLink href="/exam-requests" icon={FileSearch} label="Pedidos" tone="sky" />
               </>
             )}
-            <div className="flex items-center gap-2 text-sm text-gray-600">
+            <div className="hidden lg:flex items-center gap-2 text-sm text-gray-600 ml-1">
               <User className="w-4 h-4" />
-              <span className="hidden md:inline">{professional.full_name}</span>
+              <span>{professional.full_name}</span>
               <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs">
                 {professional.professional_type}
               </span>
             </div>
-            <button
-              onClick={handleSignOut}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-            >
+            <button onClick={handleSignOut} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0">
               <LogOut className="w-4 h-4" />
               <span className="hidden sm:inline">Sair</span>
             </button>
@@ -81,5 +65,20 @@ export function Header() {
         )}
       </div>
     </header>
+  )
+}
+
+function NavLink({ href, icon: Icon, label, tone }: any) {
+  const styles: Record<string, string> = {
+    emerald: 'hover:text-emerald-700 hover:bg-emerald-50',
+    violet: 'hover:text-violet-700 hover:bg-violet-50',
+    blue: 'hover:text-blue-700 hover:bg-blue-50',
+    sky: 'hover:text-sky-700 hover:bg-sky-50',
+  }
+  return (
+    <Link href={href} className={`flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 rounded-lg transition-colors flex-shrink-0 ${styles[tone] || styles.emerald}`}>
+      <Icon className="w-4 h-4" />
+      <span className="hidden sm:inline">{label}</span>
+    </Link>
   )
 }

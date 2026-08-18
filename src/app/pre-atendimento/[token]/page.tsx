@@ -49,6 +49,7 @@ export default function PublicPreAtendimentoPage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitted, setSubmitted] = useState(false)
   const [link, setLink] = useState<any>(null)
+  const [result, setResult] = useState<any>(null)
   const [form, setForm] = useState<any>(emptyForm)
 
   useEffect(() => {
@@ -77,40 +78,19 @@ export default function PublicPreAtendimentoPage() {
     }
 
     setLink(data)
-    setForm((current: any) => ({
-      ...current,
-      reason: current.reason || data.default_reason || '',
-    }))
+    setForm((current: any) => ({ ...current, reason: current.reason || data.default_reason || '' }))
 
     try {
       await supabase.from('patient_precheck_events').insert({
         link_id: data.id,
         professional_user_id: data.professional_user_id,
         event_type: 'public_form_opened',
-        description: 'Formulário público de pré-atendimento aberto.',
+        description: 'Formulário público de autoatendimento aberto.',
         metadata: { public_token: publicToken, user_agent: navigator.userAgent },
       })
     } catch {}
 
     setLoading(false)
-  }
-
-  function buildChecklist(payload: any, source = 'public_precheck') {
-    const hasPlan = Boolean(payload.health_plan_provider || payload.health_plan_card_number)
-    return {
-      source,
-      patient_identification: Boolean(payload.patient_name),
-      contact_available: Boolean(payload.patient_phone || payload.patient_email),
-      reason_registered: Boolean(payload.reason),
-      symptoms_registered: Boolean(payload.symptoms),
-      medications_declared: Boolean(payload.current_medications),
-      allergies_declared: Boolean(payload.allergies),
-      consent_registered: Boolean(payload.consent_lgpd),
-      plan_informed: hasPlan,
-      plan_card_available: hasPlan ? Boolean(payload.health_plan_card_number) : null,
-      administrative_review: 'pending',
-      pre_arrival_note: 'Dados preenchidos pelo paciente antes da chegada para conferência da recepção.',
-    }
   }
 
   async function submitForm() {
@@ -120,72 +100,21 @@ export default function PublicPreAtendimentoPage() {
       toast.error(`Preencha: ${missing.join(', ')}`)
       return
     }
-    if (!form.consent_lgpd) {
-      toast.error('Confirme o consentimento LGPD para enviar')
-      return
-    }
 
     setSubmitting(true)
     try {
-      const payload = normalizePayload(form)
-      const { data, error } = await supabase
-        .from('patient_precheck_submissions')
-        .insert({
-          link_id: link.id,
-          professional_user_id: link.professional_user_id,
-          patient_name: payload.patient_name,
-          patient_cpf: payload.patient_cpf,
-          patient_birth_date: payload.patient_birth_date,
-          patient_phone: payload.patient_phone,
-          patient_email: payload.patient_email,
-          companion_name: payload.companion_name,
-          companion_phone: payload.companion_phone,
-          specialty: link.specialty || null,
-          reason: payload.reason,
-          symptoms: payload.symptoms,
-          current_medications: payload.current_medications,
-          allergies: payload.allergies,
-          relevant_history: payload.relevant_history,
-          administrative_notes: payload.administrative_notes,
-          health_plan_provider: payload.health_plan_provider,
-          health_plan_card_number: payload.health_plan_card_number,
-          health_plan_type: payload.health_plan_type,
-          plan_holder_name: payload.plan_holder_name,
-          plan_valid_until: payload.plan_valid_until,
-          consent_lgpd: Boolean(payload.consent_lgpd),
-          consent_contact: Boolean(payload.consent_contact),
-          consent_plan_data: Boolean(payload.consent_plan_data),
-          consent_text: 'Paciente preencheu pré-atendimento e autorizou uso dos dados para finalidade assistencial, administrativa e organização da chegada.',
-          missing_fields: [],
-          checklist: buildChecklist(payload),
-          user_agent: navigator.userAgent,
-          metadata: {
-            source: 'public_pre_atendimento_page',
-            public_token: link.public_token,
-            clinic_name: link.clinic_name || null,
-            title: link.title,
-          },
-        })
-        .select('id')
-        .single()
-
-      if (error) throw error
-
-      try {
-        await supabase.from('patient_precheck_events').insert({
-          link_id: link.id,
-          submission_id: data?.id || null,
-          professional_user_id: link.professional_user_id,
-          event_type: 'public_form_submitted',
-          description: 'Paciente enviou formulário público de pré-atendimento.',
-          metadata: { public_token: link.public_token },
-        })
-      } catch {}
-
+      const response = await fetch('/api/precheck/self-checkin', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ public_token: link.public_token, form: normalizePayload(form) }),
+      })
+      const json = await response.json()
+      if (!response.ok) throw new Error(json.error || 'Erro ao enviar check-in')
+      setResult(json)
       setSubmitted(true)
-      toast.success('Pré-atendimento enviado')
+      toast.success('Check-in enviado para a recepção')
     } catch (error: any) {
-      toast.error(error.message || 'Erro ao enviar pré-atendimento')
+      toast.error(error.message || 'Erro ao enviar check-in')
     } finally {
       setSubmitting(false)
     }
@@ -200,8 +129,8 @@ export default function PublicPreAtendimentoPage() {
       <main className="min-h-screen bg-slate-950 flex items-center justify-center px-4">
         <section className="max-w-lg rounded-3xl bg-white p-8 text-center shadow-2xl">
           <AlertTriangle className="w-14 h-14 text-amber-600 mx-auto mb-4" />
-          <h1 className="text-2xl font-bold text-gray-900">Link indisponível</h1>
-          <p className="text-gray-600 mt-2">Este formulário pode estar fechado, expirado ou ter atingido o limite de envios.</p>
+          <h1 className="text-2xl font-bold text-gray-900">Check-in indisponível</h1>
+          <p className="text-gray-600 mt-2">Este QR Code ou link pode estar fechado, expirado ou ter atingido o limite de envios.</p>
         </section>
       </main>
     )
@@ -212,13 +141,16 @@ export default function PublicPreAtendimentoPage() {
       <main className="min-h-screen bg-gradient-to-br from-slate-950 via-emerald-950 to-blue-950 px-4 py-10 flex items-center justify-center">
         <section className="max-w-xl rounded-[2rem] bg-white p-8 text-center shadow-2xl">
           <CheckCircle className="w-16 h-16 text-emerald-600 mx-auto mb-4" />
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Pré-atendimento enviado</h1>
-          <p className="text-gray-600 mt-3">Seus dados foram enviados para a equipe conferir antes do atendimento. Na chegada, avise que você já preencheu o pré-atendimento.</p>
+          <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Check-in realizado</h1>
+          <p className="text-gray-600 mt-3">
+            Seus dados entraram automaticamente na fila da recepção. Aguarde ser chamado ou procure a equipe apenas se precisar corrigir alguma informação.
+          </p>
           <div className="mt-6 rounded-2xl bg-emerald-50 border border-emerald-100 p-4 text-sm text-emerald-900">
-            O envio não substitui consulta, avaliação ou conduta profissional. A equipe poderá solicitar confirmação de dados e documentos.
+            Protocolo interno: {result?.intakeId ? String(result.intakeId).slice(0, 8).toUpperCase() : 'registrado'}.
+            Este envio agiliza a chegada, mas a equipe poderá solicitar confirmação de documentos, plano ou dados sensíveis.
           </div>
           <Link href="/" className="mt-6 inline-flex items-center gap-2 rounded-xl bg-slate-950 px-5 py-3 text-white font-semibold hover:bg-slate-800">
-            Voltar <ArrowRight className="w-4 h-4" />
+            Concluir <ArrowRight className="w-4 h-4" />
           </Link>
         </section>
       </main>
@@ -230,21 +162,23 @@ export default function PublicPreAtendimentoPage() {
       <section className="max-w-4xl mx-auto space-y-5">
         <header className="rounded-[2rem] bg-white/10 border border-white/10 p-6 md:p-8 text-white shadow-xl backdrop-blur">
           <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-sm text-emerald-100 mb-5">
-            <Sparkles className="w-4 h-4" /> MyDataMed • Pré-atendimento
+            <Sparkles className="w-4 h-4" /> MyDataMed • Autoatendimento
           </div>
-          <h1 className="text-3xl md:text-5xl font-bold leading-tight">{link.title || 'Pré-atendimento'}</h1>
-          <p className="text-white/75 mt-4 text-lg max-w-3xl">{link.landing_message || 'Preencha seus dados antes da chegada para agilizar o atendimento.'}</p>
+          <h1 className="text-3xl md:text-5xl font-bold leading-tight">{link.title || 'Check-in de recepção'}</h1>
+          <p className="text-white/75 mt-4 text-lg max-w-3xl">
+            {link.landing_message || 'Preencha seus dados para entrar na fila da recepção sem papelada.'}
+          </p>
           <div className="grid md:grid-cols-3 gap-3 mt-6 text-sm">
             <Info icon={Stethoscope} label="Serviço" value={link.specialty || 'Atendimento'} />
             <Info icon={HeartPulse} label="Unidade" value={link.clinic_name || 'MyDataMed'} />
-            <Info icon={ShieldCheck} label="Dados" value="Consentimento obrigatório" />
+            <Info icon={ShieldCheck} label="Privacidade" value="Consentimento obrigatório" />
           </div>
         </header>
 
         <section className="rounded-[2rem] bg-white p-5 md:p-7 shadow-2xl space-y-6">
           <div>
             <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2"><User className="w-5 h-5 text-emerald-700" /> Seus dados</h2>
-            <p className="text-sm text-gray-600 mt-1">Preencha o mínimo necessário para a equipe preparar sua chegada.</p>
+            <p className="text-sm text-gray-600 mt-1">Preencha no seu celular. A recepção só confere pendências e chama você.</p>
           </div>
 
           <div className="grid md:grid-cols-2 gap-3">
@@ -279,7 +213,7 @@ export default function PublicPreAtendimentoPage() {
             </div>
           )}
 
-          <Area label="Observações administrativas" value={form.administrative_notes} onChange={(v: string) => setForm({ ...form, administrative_notes: v })} placeholder="Ex: horário de chegada, documentos, preferências de contato, necessidades de acessibilidade." />
+          <Area label="Observações administrativas" value={form.administrative_notes} onChange={(v: string) => setForm({ ...form, administrative_notes: v })} placeholder="Ex: documento pendente, necessidade de acessibilidade, preferência de contato." />
 
           <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4 space-y-3 text-sm text-amber-950">
             <h2 className="font-bold flex items-center gap-2"><Lock className="w-5 h-5" /> Consentimentos</h2>
@@ -294,10 +228,10 @@ export default function PublicPreAtendimentoPage() {
           )}
 
           <button onClick={submitForm} disabled={submitting || missingPreview.length > 0} className="w-full rounded-2xl bg-emerald-700 text-white py-4 font-bold disabled:opacity-50 hover:bg-emerald-800 flex items-center justify-center gap-2">
-            {submitting ? <><Loader2 className="w-5 h-5 animate-spin" /> Enviando...</> : <><ClipboardCheck className="w-5 h-5" /> Enviar pré-atendimento</>}
+            {submitting ? <><Loader2 className="w-5 h-5 animate-spin" /> Enviando...</> : <><ClipboardCheck className="w-5 h-5" /> Fazer check-in</>}
           </button>
 
-          <p className="text-center text-xs text-gray-500">O formulário agiliza a chegada, mas a equipe poderá confirmar dados e solicitar documentos no atendimento.</p>
+          <p className="text-center text-xs text-gray-500">O autoatendimento reduz fila e papelada, mas a equipe poderá confirmar dados e documentos.</p>
         </section>
       </section>
     </main>

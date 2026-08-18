@@ -4,7 +4,7 @@ import { ReactNode } from 'react'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { Toaster } from 'sonner'
 import Link from 'next/link'
-import { Brain, BriefcaseBusiness, ClipboardCheck, FileSearch, FileText, Heart, LogOut, ShieldCheck, SlidersHorizontal, User } from 'lucide-react'
+import { Brain, BriefcaseBusiness, ClipboardCheck, ClipboardList, FileSearch, FileText, Heart, LogOut, ShieldCheck, SlidersHorizontal, User } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 
@@ -41,6 +41,7 @@ export function Header() {
         {user && professional && (
           <div className="flex items-center gap-1 md:gap-2 overflow-x-auto">
             <NavLink href="/consultorio" icon={BriefcaseBusiness} label="Consultório" tone="emerald" />
+            <NavLink href="/pre-atendimento" icon={ClipboardList} label="Pré" tone="emerald" />
             <NavLink href="/entrada-paciente" icon={ClipboardCheck} label="Entrada" tone="blue" />
             <NavLink href="/consulta-assistida" icon={Brain} label="Atendimento IA" tone="violet" />
             <NavLink href="/meu-jeito-atender" icon={SlidersHorizontal} label="Meu jeito" tone="violet" />

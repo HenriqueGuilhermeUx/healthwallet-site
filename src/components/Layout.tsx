@@ -4,7 +4,7 @@ import { ReactNode } from 'react'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { Toaster } from 'sonner'
 import Link from 'next/link'
-import { Brain, BriefcaseBusiness, ClipboardCheck, ClipboardList, FileSearch, FileText, Globe2, Heart, LogOut, MonitorSmartphone, ShieldCheck, SlidersHorizontal, User, WalletCards } from 'lucide-react'
+import { Brain, BriefcaseBusiness, CalendarDays, ClipboardCheck, ClipboardList, CreditCard, FileSearch, FileText, Globe2, Heart, Image, LogOut, MonitorSmartphone, ShieldCheck, SlidersHorizontal, Sparkles, User, WalletCards } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 
@@ -41,10 +41,13 @@ export function Header() {
         {user && professional && (
           <div className="flex items-center gap-1 md:gap-2 overflow-x-auto">
             <NavLink href="/consultorio" icon={BriefcaseBusiness} label="Consultório" tone="emerald" />
+            <NavLink href="/agenda" icon={CalendarDays} label="Agenda" tone="emerald" />
             <NavLink href="/minha-pagina" icon={Globe2} label="Página" tone="emerald" />
+            <NavLink href="/midia" icon={Image} label="Mídia" tone="emerald" />
             <NavLink href="/backoffice" icon={WalletCards} label="Backoffice" tone="blue" />
+            <NavLink href="/cobrancas" icon={CreditCard} label="Cobranças" tone="blue" />
+            <NavLink href="/modo" icon={Sparkles} label="MODO" tone="violet" />
             <NavLink href="/recepcao-autoatendimento" icon={MonitorSmartphone} label="Recepção" tone="emerald" />
-            <NavLink href="/pre-atendimento" icon={ClipboardList} label="Pré" tone="emerald" />
             <NavLink href="/entrada-paciente" icon={ClipboardCheck} label="Entrada" tone="blue" />
             <NavLink href="/consulta-assistida" icon={Brain} label="Atendimento IA" tone="violet" />
             <NavLink href="/meu-jeito-atender" icon={SlidersHorizontal} label="Meu jeito" tone="violet" />

@@ -50,6 +50,7 @@ export function Header() {
             <NavLink href="/recepcao-autoatendimento" icon={MonitorSmartphone} label="Recepção" tone="emerald" />
             <NavLink href="/entrada-paciente" icon={ClipboardCheck} label="Entrada" tone="blue" />
             <NavLink href="/consulta-assistida" icon={Brain} label="Atendimento IA" tone="violet" />
+            <NavLink href="/prontuario" icon={FileText} label="Prontuário" tone="blue" />
             <NavLink href="/meu-jeito-atender" icon={SlidersHorizontal} label="Meu jeito" tone="violet" />
             <NavLink href="/lgpd-consultorio" icon={ShieldCheck} label="LGPD" tone="blue" />
             {canShowRegulated && (

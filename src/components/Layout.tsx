@@ -4,7 +4,7 @@ import { ReactNode } from 'react'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { Toaster } from 'sonner'
 import Link from 'next/link'
-import { Brain, BriefcaseBusiness, ClipboardCheck, ClipboardList, FileSearch, FileText, Heart, LogOut, MonitorSmartphone, ShieldCheck, SlidersHorizontal, User } from 'lucide-react'
+import { Brain, BriefcaseBusiness, ClipboardCheck, ClipboardList, FileSearch, FileText, Globe2, Heart, LogOut, MonitorSmartphone, ShieldCheck, SlidersHorizontal, User, WalletCards } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 
@@ -41,6 +41,8 @@ export function Header() {
         {user && professional && (
           <div className="flex items-center gap-1 md:gap-2 overflow-x-auto">
             <NavLink href="/consultorio" icon={BriefcaseBusiness} label="Consultório" tone="emerald" />
+            <NavLink href="/minha-pagina" icon={Globe2} label="Página" tone="emerald" />
+            <NavLink href="/backoffice" icon={WalletCards} label="Backoffice" tone="blue" />
             <NavLink href="/recepcao-autoatendimento" icon={MonitorSmartphone} label="Recepção" tone="emerald" />
             <NavLink href="/pre-atendimento" icon={ClipboardList} label="Pré" tone="emerald" />
             <NavLink href="/entrada-paciente" icon={ClipboardCheck} label="Entrada" tone="blue" />
@@ -53,7 +55,7 @@ export function Header() {
                 <NavLink href="/exam-requests" icon={FileSearch} label="Pedidos" tone="sky" />
               </>
             )}
-            <div className="hidden lg:flex items-center gap-2 text-sm text-gray-600 ml-1">
+            <div className="hidden xl:flex items-center gap-2 text-sm text-gray-600 ml-1">
               <User className="w-4 h-4" />
               <span>{professional.full_name}</span>
               <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs">

@@ -35,14 +35,43 @@ function getSupabaseAdmin() {
   return createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } })
 }
 
+function safeCompare(received: string, expected: string) {
+  const receivedBuffer = Buffer.from(received || '')
+  const expectedBuffer = Buffer.from(expected || '')
+  if (!receivedBuffer.length || receivedBuffer.length !== expectedBuffer.length) return false
+  return crypto.timingSafeEqual(receivedBuffer, expectedBuffer)
+}
+
+function getAuthorizationSecret(req: NextRequest) {
+  const authorization = req.headers.get('authorization') || ''
+  if (authorization.toLowerCase().startsWith('bearer ')) return authorization.slice(7).trim()
+
+  if (authorization.toLowerCase().startsWith('basic ')) {
+    try {
+      const decoded = Buffer.from(authorization.slice(6), 'base64').toString('utf8')
+      return decoded.includes(':') ? decoded.split(':').pop() || '' : decoded
+    } catch {
+      return ''
+    }
+  }
+
+  return ''
+}
+
 function verifyInboundSecret(req: NextRequest) {
   const expected = process.env.HEALTHWALLET_INBOUND_EMAIL_SECRET
   if (!expected) return true
-  const received = req.headers.get('x-healthwallet-inbound-secret') || req.headers.get('x-inbound-secret') || ''
-  const receivedBuffer = Buffer.from(received)
-  const expectedBuffer = Buffer.from(expected)
-  if (receivedBuffer.length !== expectedBuffer.length) return false
-  return crypto.timingSafeEqual(receivedBuffer, expectedBuffer)
+
+  const url = new URL(req.url)
+  const candidates = [
+    req.headers.get('x-healthwallet-inbound-secret') || '',
+    req.headers.get('x-inbound-secret') || '',
+    url.searchParams.get('secret') || '',
+    url.searchParams.get('token') || '',
+    getAuthorizationSecret(req),
+  ]
+
+  return candidates.some((candidate) => safeCompare(candidate, expected))
 }
 
 function normalizeEmail(value: string | null | undefined) {

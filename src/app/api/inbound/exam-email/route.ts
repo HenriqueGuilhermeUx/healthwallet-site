@@ -39,7 +39,10 @@ function verifyInboundSecret(req: NextRequest) {
   const expected = process.env.HEALTHWALLET_INBOUND_EMAIL_SECRET
   if (!expected) return true
   const received = req.headers.get('x-healthwallet-inbound-secret') || req.headers.get('x-inbound-secret') || ''
-  return crypto.timingSafeEqual(Buffer.from(received), Buffer.from(expected))
+  const receivedBuffer = Buffer.from(received)
+  const expectedBuffer = Buffer.from(expected)
+  if (receivedBuffer.length !== expectedBuffer.length) return false
+  return crypto.timingSafeEqual(receivedBuffer, expectedBuffer)
 }
 
 function normalizeEmail(value: string | null | undefined) {

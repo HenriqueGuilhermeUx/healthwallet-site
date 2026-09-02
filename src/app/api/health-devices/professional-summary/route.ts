@@ -38,7 +38,7 @@ export async function GET(req: NextRequest) {
 
     const { data: professional } = await supabase
       .from('professionals')
-      .select('id,user_id,full_name,email')
+      .select('id,user_id,full_name')
       .eq('user_id', authUser.user.id)
       .maybeSingle()
 
@@ -50,8 +50,8 @@ export async function GET(req: NextRequest) {
       .from('health_data_consents')
       .select('*')
       .eq('status', 'active')
+      .eq('professional_id', professional.id)
       .contains('allowed_categories', ['device_data'])
-      .or(`professional_id.eq.${professional.id},metadata->>professional_email.eq.${authUser.user.email}`)
 
     if (careLinkId) consentQuery = consentQuery.eq('care_link_id', careLinkId)
     if (patientId) consentQuery = consentQuery.eq('patient_id', patientId)

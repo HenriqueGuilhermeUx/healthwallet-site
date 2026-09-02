@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
       }))
 
     if (validObservations.length) {
-      const { error } = await supabase.from('health_observations').upsert(validObservations, { onConflict: 'user_id,provider,external_id' })
+      const { error } = await supabase.from('health_observations').insert(validObservations)
       if (error) throw error
     }
 

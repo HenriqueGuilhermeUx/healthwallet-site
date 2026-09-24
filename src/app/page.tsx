@@ -70,6 +70,37 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="max-w-7xl mx-auto px-4 pb-16">
+        <div className="overflow-hidden rounded-[2rem] border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-8 md:p-10">
+          <div className="grid lg:grid-cols-[1.08fr_0.92fr] gap-8 items-center">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-3 py-1.5 text-sm font-bold text-emerald-800">
+                <icons.HeartPulse className="w-4 h-4" /> MyDataMed Concierge
+              </div>
+              <h2 className="text-3xl md:text-5xl font-bold text-gray-900 leading-tight mt-5">Sua saúde organizada. E, quando precisar, acompanhada.</h2>
+              <p className="text-gray-600 mt-5 text-lg max-w-3xl">O HealthWallet continua sendo onde a saúde do paciente mora. O Concierge acrescenta acompanhamento humano para ajudar a organizar solicitações, retornos e próximos passos — com enfermagem de referência e escalonamento médico quando necessário.</p>
+              <div className="flex flex-col sm:flex-row gap-3 mt-7">
+                <Link href="/concierge" className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 font-bold text-white hover:bg-emerald-700">
+                  Conhecer Concierge <icons.ArrowRight className="w-4 h-4" />
+                </Link>
+                <Link href="/healthwallet" className="inline-flex items-center justify-center rounded-xl border border-emerald-200 bg-white px-5 py-3 font-semibold text-emerald-800 hover:bg-emerald-50">
+                  Ver HealthWallet
+                </Link>
+              </div>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4">
+              {[
+                { icon: icons.Users, title: 'Enfermeiro de referência', text: 'Um ponto humano para acompanhar solicitações, retornos e continuidade.' },
+                { icon: icons.Stethoscope, title: 'Médico de referência', text: 'É acionado quando houver necessidade de avaliação médica.' },
+                { icon: icons.ShieldCheck, title: 'Com consentimento', text: 'O HealthWallet permanece no centro e o contexto é acessado de forma autorizada.' },
+                { icon: icons.MessageCircle, title: 'Próximos passos', text: 'Mais organização para transformar pendências em uma jornada coordenada.' },
+              ].map((item) => <div key={item.title} className="rounded-3xl bg-white border border-emerald-100 p-5 shadow-sm"><item.icon className="w-7 h-7 text-emerald-700 mb-4" /><h3 className="font-bold text-gray-900">{item.title}</h3><p className="text-sm text-gray-600 mt-2">{item.text}</p></div>)}
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="bg-gray-50 border-y border-gray-100 py-16">
         <div className="max-w-7xl mx-auto px-4">
           <div className="text-center max-w-3xl mx-auto mb-10">

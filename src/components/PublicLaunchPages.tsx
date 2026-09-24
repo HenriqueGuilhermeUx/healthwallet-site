@@ -54,6 +54,7 @@ export function PublicHeader() {
         <nav className="hidden lg:flex items-center gap-1 text-sm text-gray-700">
           <Link href="/mydatamed" className="px-3 py-2 rounded-xl hover:bg-emerald-50 hover:text-emerald-700">MyDataMed</Link>
           <Link href="/healthwallet" className="px-3 py-2 rounded-xl hover:bg-emerald-50 hover:text-emerald-700">HealthWallet</Link>
+          <Link href="/concierge" className="px-3 py-2 rounded-xl hover:bg-emerald-50 hover:text-emerald-700">Concierge</Link>
           <Link href="/para-medicos" className="px-3 py-2 rounded-xl hover:bg-emerald-50 hover:text-emerald-700">Médicos</Link>
           <Link href="/para-clinicas" className="px-3 py-2 rounded-xl hover:bg-emerald-50 hover:text-emerald-700">Clínicas</Link>
           <Link href="/para-pacientes" className="px-3 py-2 rounded-xl hover:bg-emerald-50 hover:text-emerald-700">Pacientes</Link>
@@ -85,6 +86,7 @@ export function PublicFooter() {
           <div className="space-y-2 text-white/65 text-sm">
             <Link href="/mydatamed" className="block hover:text-white">MyDataMed</Link>
             <Link href="/healthwallet" className="block hover:text-white">HealthWallet</Link>
+            <Link href="/concierge" className="block hover:text-white">Concierge</Link>
             <Link href="/recepcao-digital" className="block hover:text-white">Recepção digital</Link>
             <Link href="/planos" className="block hover:text-white">Planos</Link>
           </div>

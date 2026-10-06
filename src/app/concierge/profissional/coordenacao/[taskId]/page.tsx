@@ -8,7 +8,6 @@ import {
   CalendarCheck,
   CheckCircle2,
   Clock3,
-  FileCheck2,
   Loader2,
   MapPin,
   MessageCircle,
@@ -433,7 +432,7 @@ export default function ExternalCoordinationTaskPage() {
           </section>
 
           <section className="rounded-3xl border border-emerald-200 bg-emerald-50 p-5">
-            <div className="flex items-center gap-2"><FileCheck2 className="w-5 h-5 text-emerald-700" /><h2 className="font-bold text-emerald-950">Fechar o loop</h2></div>
+            <div className="flex items-center gap-2"><CheckCircle2 className="w-5 h-5 text-emerald-700" /><h2 className="font-bold text-emerald-950">Fechar o loop</h2></div>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               <ActionButton label="Marcar realizado" onClick={() => updateTask({ status: 'completed' }, 'service_completed', 'O atendimento/exame foi marcado como realizado.', 'patient')} />
               <ActionButton label="Aguardar resultado" onClick={() => updateTask({ status: 'result_expected' }, 'result_expected', 'O Concierge está aguardando o resultado para continuar a jornada.', 'patient')} />

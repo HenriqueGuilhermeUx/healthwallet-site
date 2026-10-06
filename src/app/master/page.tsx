@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   BadgeCheck,
-  BriefcaseMedical,
   Loader2,
   RefreshCw,
   ShieldCheck,
@@ -180,7 +179,7 @@ export default function MasterConsolePage() {
       <section className="grid gap-3 sm:grid-cols-4">
         <Metric icon={Users} label="Ativos" value={stats.active} />
         <Metric icon={UserCog} label="Concierge" value={stats.concierge} />
-        <Metric icon={BriefcaseMedical} label="Clínicos" value={stats.clinical} />
+        <Metric icon={Stethoscope} label="Clínicos" value={stats.clinical} />
         <Metric icon={ShieldCheck} label="Masters" value={stats.masters} />
       </section>
 

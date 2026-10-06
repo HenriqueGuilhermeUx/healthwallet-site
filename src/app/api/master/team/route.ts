@@ -237,6 +237,9 @@ export async function PATCH(request: NextRequest) {
     const role = body.role ? String(body.role) : undefined
 
     if (!userId) return NextResponse.json({ error: 'Usuário não informado.' }, { status: 400 })
+    if (userId === caller.id && ((role && role !== 'master') || body.active === false)) {
+      return NextResponse.json({ error: 'O MASTER atual não pode remover o próprio acesso.' }, { status: 400 })
+    }
     if (role && !allowedRoles.has(role)) {
       return NextResponse.json({ error: 'Função inválida.' }, { status: 400 })
     }

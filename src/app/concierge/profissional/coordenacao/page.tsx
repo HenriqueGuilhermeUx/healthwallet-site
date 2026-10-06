@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import {
   ArrowRight,
   CalendarCheck,
@@ -57,7 +57,6 @@ function statusTone(status: string) {
 
 export default function ExternalCoordinationPage() {
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { user, loading: authLoading } = useAuth()
   const [loading, setLoading] = useState(true)
   const [member, setMember] = useState<any>(null)
@@ -65,8 +64,8 @@ export default function ExternalCoordinationPage() {
   const [saving, setSaving] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [form, setForm] = useState({
-    patientId: searchParams.get('patient') || '',
-    patientName: searchParams.get('name') || '',
+    patientId: '',
+    patientName: '',
     taskType: 'exam',
     title: '',
     description: '',
@@ -79,6 +78,19 @@ export default function ExternalCoordinationPage() {
   useEffect(() => {
     if (!authLoading && !user) router.push('/login')
   }, [authLoading, user, router])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const patientId = params.get('patient') || ''
+    const patientName = params.get('name') || ''
+    if (patientId || patientName) {
+      setForm((current) => ({
+        ...current,
+        patientId: patientId || current.patientId,
+        patientName: patientName || current.patientName,
+      }))
+    }
+  }, [])
 
   useEffect(() => {
     if (user) void load()

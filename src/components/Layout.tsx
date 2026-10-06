@@ -1,12 +1,13 @@
 'use client'
 
-import { ReactNode } from 'react'
+import { ReactNode, useEffect, useState } from 'react'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { Toaster } from 'sonner'
 import Link from 'next/link'
-import { Brain, BriefcaseBusiness, CalendarDays, ClipboardCheck, CreditCard, FileSearch, FileText, Globe2, Heart, HeartPulse, Image, LogOut, MonitorSmartphone, ShieldCheck, SlidersHorizontal, Sparkles, User, WalletCards, Watch } from 'lucide-react'
+import { Brain, BriefcaseBusiness, CalendarCheck, CalendarDays, ClipboardCheck, CreditCard, FileSearch, FileText, Globe2, Heart, HeartPulse, Image, LogOut, MonitorSmartphone, ShieldCheck, SlidersHorizontal, Sparkles, User, UserCog, WalletCards, Watch } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
+import { supabase } from '@/lib/supabase'
 
 export function Providers({ children }: { children: ReactNode }) {
   return (
@@ -20,6 +21,29 @@ export function Providers({ children }: { children: ReactNode }) {
 export function Header() {
   const { user, professional, signOut } = useAuth()
   const router = useRouter()
+  const [teamRole, setTeamRole] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    async function loadTeamRole() {
+      if (!user) {
+        if (!cancelled) setTeamRole(null)
+        return
+      }
+
+      const { data } = await supabase
+        .from('mydatamed_team_members')
+        .select('role,active')
+        .eq('user_id', user.id)
+        .maybeSingle()
+
+      if (!cancelled) setTeamRole(data?.active ? data.role : null)
+    }
+
+    void loadTeamRole()
+    return () => { cancelled = true }
+  }, [user?.id])
 
   const handleSignOut = async () => {
     await signOut()
@@ -27,6 +51,9 @@ export function Header() {
   }
 
   const canShowRegulated = professional?.professional_type === 'medico'
+  const canUseClinicalConcierge = !!teamRole && ['master', 'admin', 'care_coordinator', 'nurse', 'doctor'].includes(teamRole)
+  const canUseExternalCoordination = !!teamRole && ['master', 'admin', 'care_coordinator', 'concierge_agent', 'nurse', 'doctor'].includes(teamRole)
+  const isMaster = teamRole === 'master'
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white/95 backdrop-blur">
@@ -38,29 +65,50 @@ export function Header() {
           <span className="font-bold text-xl">MyData<span className="text-emerald-600">Med</span></span>
         </Link>
 
-        {user && professional && (
+        {user && (professional || teamRole) && (
           <div className="flex items-center gap-1 md:gap-2 overflow-x-auto">
-            <NavLink href="/consultorio" icon={BriefcaseBusiness} label="Consultório" tone="emerald" />
-            <NavLink href="/agenda" icon={CalendarDays} label="Agenda" tone="emerald" />
-            <NavLink href="/minha-pagina" icon={Globe2} label="Página" tone="emerald" />
-            <NavLink href="/midia" icon={Image} label="Mídia" tone="emerald" />
-            <NavLink href="/backoffice" icon={WalletCards} label="Backoffice" tone="blue" />
-            <NavLink href="/cobrancas" icon={CreditCard} label="Cobranças" tone="blue" />
-            <NavLink href="/modo" icon={Sparkles} label="MODO" tone="violet" />
-            <NavLink href="/recepcao-autoatendimento" icon={MonitorSmartphone} label="Recepção" tone="emerald" />
-            <NavLink href="/entrada-paciente" icon={ClipboardCheck} label="Entrada" tone="blue" />
-            <NavLink href="/dados-dispositivos" icon={Watch} label="Dispositivos" tone="sky" />
-            <NavLink href="/concierge/profissional" icon={HeartPulse} label="Concierge" tone="emerald" />
-            <NavLink href="/consulta-assistida" icon={Brain} label="Atendimento IA" tone="violet" />
-            <NavLink href="/prontuario" icon={FileText} label="Prontuário" tone="blue" />
-            <NavLink href="/meu-jeito-atender" icon={SlidersHorizontal} label="Meu jeito" tone="violet" />
-            <NavLink href="/lgpd-consultorio" icon={ShieldCheck} label="LGPD" tone="blue" />
-            {canShowRegulated && (
+            {professional && (
               <>
-                <NavLink href="/prescriptions" icon={FileText} label="Receitas" tone="emerald" />
-                <NavLink href="/exam-requests" icon={FileSearch} label="Pedidos" tone="sky" />
+                <NavLink href="/consultorio" icon={BriefcaseBusiness} label="Consultório" tone="emerald" />
+                <NavLink href="/agenda" icon={CalendarDays} label="Agenda" tone="emerald" />
+                <NavLink href="/minha-pagina" icon={Globe2} label="Página" tone="emerald" />
+                <NavLink href="/midia" icon={Image} label="Mídia" tone="emerald" />
+                <NavLink href="/backoffice" icon={WalletCards} label="Backoffice" tone="blue" />
+                <NavLink href="/cobrancas" icon={CreditCard} label="Cobranças" tone="blue" />
+                <NavLink href="/modo" icon={Sparkles} label="MODO" tone="violet" />
+                <NavLink href="/recepcao-autoatendimento" icon={MonitorSmartphone} label="Recepção" tone="emerald" />
+                <NavLink href="/entrada-paciente" icon={ClipboardCheck} label="Entrada" tone="blue" />
+                <NavLink href="/dados-dispositivos" icon={Watch} label="Dispositivos" tone="sky" />
+                <NavLink href="/consulta-assistida" icon={Brain} label="Atendimento IA" tone="violet" />
+                <NavLink href="/prontuario" icon={FileText} label="Prontuário" tone="blue" />
+                <NavLink href="/meu-jeito-atender" icon={SlidersHorizontal} label="Meu jeito" tone="violet" />
+                <NavLink href="/lgpd-consultorio" icon={ShieldCheck} label="LGPD" tone="blue" />
+                {canShowRegulated && (
+                  <>
+                    <NavLink href="/prescriptions" icon={FileText} label="Receitas" tone="emerald" />
+                    <NavLink href="/exam-requests" icon={FileSearch} label="Pedidos" tone="sky" />
+                  </>
+                )}
               </>
             )}
+            {canUseClinicalConcierge && <NavLink href="/concierge/profissional" icon={HeartPulse} label="Concierge" tone="emerald" />}
+            {canUseExternalCoordination && <NavLink href="/concierge/profissional/coordenacao" icon={CalendarCheck} label="Coordenação" tone="blue" />}
+            {isMaster && <NavLink href="/master" icon={UserCog} label="Master" tone="violet" />}
+            {professional && (
+              <div className="hidden xl:flex items-center gap-2 text-sm text-gray-600 ml-1">
+                <User className="w-4 h-4" />
+                <span>{professional.full_name}</span>
+                <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs">
+                  {professional.professional_type}
+                </span>
+              </div>
+            )}
+            <button onClick={handleSignOut} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0">
+              <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline">Sair</span>
+            </button>
+          </div>
+        )}
             <div className="hidden xl:flex items-center gap-2 text-sm text-gray-600 ml-1">
               <User className="w-4 h-4" />
               <span>{professional.full_name}</span>

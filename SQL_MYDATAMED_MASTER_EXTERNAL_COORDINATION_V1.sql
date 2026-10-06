@@ -173,6 +173,8 @@ AS $$
 $$;
 
 REVOKE ALL ON FUNCTION private.mydatamed_is_master(UUID) FROM PUBLIC;
+GRANT USAGE ON SCHEMA private TO authenticated;
+GRANT EXECUTE ON FUNCTION private.mydatamed_is_master(UUID) TO authenticated;
 
 DROP POLICY IF EXISTS mydatamed_team_read_self_or_master ON public.mydatamed_team_members;
 CREATE POLICY mydatamed_team_read_self_or_master
@@ -370,6 +372,7 @@ AS $$
 $$;
 
 REVOKE ALL ON FUNCTION private.mydatamed_external_role(UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION private.mydatamed_external_role(UUID) TO authenticated;
 
 CREATE OR REPLACE FUNCTION private.mydatamed_can_access_external_task(
   target_task UUID,
@@ -413,6 +416,7 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION private.mydatamed_can_access_external_task(UUID, UUID) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION private.mydatamed_can_access_external_task(UUID, UUID) TO authenticated;
 
 -- Task policies
 DROP POLICY IF EXISTS external_tasks_team_read ON public.concierge_external_tasks;

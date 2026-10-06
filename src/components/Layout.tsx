@@ -4,7 +4,7 @@ import { ReactNode } from 'react'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { Toaster } from 'sonner'
 import Link from 'next/link'
-import { Brain, BriefcaseBusiness, CalendarDays, ClipboardCheck, CreditCard, FileSearch, FileText, Globe2, Heart, Image, LogOut, MonitorSmartphone, ShieldCheck, SlidersHorizontal, Sparkles, User, WalletCards, Watch } from 'lucide-react'
+import { Brain, BriefcaseBusiness, CalendarDays, ClipboardCheck, CreditCard, FileSearch, FileText, Globe2, Heart, HeartPulse, Image, LogOut, MonitorSmartphone, ShieldCheck, SlidersHorizontal, Sparkles, User, WalletCards, Watch } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useRouter } from 'next/navigation'
 
@@ -50,6 +50,7 @@ export function Header() {
             <NavLink href="/recepcao-autoatendimento" icon={MonitorSmartphone} label="Recepção" tone="emerald" />
             <NavLink href="/entrada-paciente" icon={ClipboardCheck} label="Entrada" tone="blue" />
             <NavLink href="/dados-dispositivos" icon={Watch} label="Dispositivos" tone="sky" />
+            <NavLink href="/concierge/profissional" icon={HeartPulse} label="Concierge" tone="emerald" />
             <NavLink href="/consulta-assistida" icon={Brain} label="Atendimento IA" tone="violet" />
             <NavLink href="/prontuario" icon={FileText} label="Prontuário" tone="blue" />
             <NavLink href="/meu-jeito-atender" icon={SlidersHorizontal} label="Meu jeito" tone="violet" />

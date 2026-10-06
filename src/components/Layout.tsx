@@ -1,11 +1,32 @@
 'use client'
 
 import { ReactNode, useEffect, useState } from 'react'
-import { AuthProvider } from '@/contexts/AuthContext'
+import { AuthProvider, useAuth } from '@/contexts/AuthContext'
 import { Toaster } from 'sonner'
 import Link from 'next/link'
-import { Brain, BriefcaseBusiness, CalendarCheck, CalendarDays, ClipboardCheck, CreditCard, FileSearch, FileText, Globe2, Heart, HeartPulse, Image, LogOut, MonitorSmartphone, ShieldCheck, SlidersHorizontal, Sparkles, User, UserCog, WalletCards, Watch } from 'lucide-react'
-import { useAuth } from '@/contexts/AuthContext'
+import {
+  Brain,
+  BriefcaseBusiness,
+  CalendarCheck,
+  CalendarDays,
+  ClipboardCheck,
+  CreditCard,
+  FileSearch,
+  FileText,
+  Globe2,
+  Heart,
+  HeartPulse,
+  Image,
+  LogOut,
+  MonitorSmartphone,
+  ShieldCheck,
+  SlidersHorizontal,
+  Sparkles,
+  User,
+  UserCog,
+  WalletCards,
+  Watch,
+} from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 
@@ -42,7 +63,9 @@ export function Header() {
     }
 
     void loadTeamRole()
-    return () => { cancelled = true }
+    return () => {
+      cancelled = true
+    }
   }, [user?.id])
 
   const handleSignOut = async () => {
@@ -91,9 +114,19 @@ export function Header() {
                 )}
               </>
             )}
-            {canUseClinicalConcierge && <NavLink href="/concierge/profissional" icon={HeartPulse} label="Concierge" tone="emerald" />}
-            {canUseExternalCoordination && <NavLink href="/concierge/profissional/coordenacao" icon={CalendarCheck} label="Coordenação" tone="blue" />}
-            {isMaster && <NavLink href="/master" icon={UserCog} label="Master" tone="violet" />}
+
+            {canUseClinicalConcierge && (
+              <NavLink href="/concierge/profissional" icon={HeartPulse} label="Concierge" tone="emerald" />
+            )}
+
+            {canUseExternalCoordination && (
+              <NavLink href="/concierge/profissional/coordenacao" icon={CalendarCheck} label="Coordenação" tone="blue" />
+            )}
+
+            {isMaster && (
+              <NavLink href="/master" icon={UserCog} label="Master" tone="violet" />
+            )}
+
             {professional && (
               <div className="hidden xl:flex items-center gap-2 text-sm text-gray-600 ml-1">
                 <User className="w-4 h-4" />
@@ -103,19 +136,7 @@ export function Header() {
                 </span>
               </div>
             )}
-            <button onClick={handleSignOut} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0">
-              <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Sair</span>
-            </button>
-          </div>
-        )}
-            <div className="hidden xl:flex items-center gap-2 text-sm text-gray-600 ml-1">
-              <User className="w-4 h-4" />
-              <span>{professional.full_name}</span>
-              <span className="px-2 py-0.5 bg-emerald-100 text-emerald-700 rounded-full text-xs">
-                {professional.professional_type}
-              </span>
-            </div>
+
             <button onClick={handleSignOut} className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0">
               <LogOut className="w-4 h-4" />
               <span className="hidden sm:inline">Sair</span>
@@ -134,8 +155,12 @@ function NavLink({ href, icon: Icon, label, tone }: any) {
     blue: 'hover:text-blue-700 hover:bg-blue-50',
     sky: 'hover:text-sky-700 hover:bg-sky-50',
   }
+
   return (
-    <Link href={href} className={`flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 rounded-lg transition-colors flex-shrink-0 ${styles[tone] || styles.emerald}`}>
+    <Link
+      href={href}
+      className={'flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 rounded-lg transition-colors flex-shrink-0 ' + (styles[tone] || styles.emerald)}
+    >
       <Icon className="w-4 h-4" />
       <span className="hidden sm:inline">{label}</span>
     </Link>

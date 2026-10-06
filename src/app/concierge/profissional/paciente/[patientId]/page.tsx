@@ -7,6 +7,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  CalendarCheck,
   CalendarClock,
   CheckCircle2,
   ClipboardList,
@@ -214,6 +215,12 @@ export default function ConciergePatientCommandCenter() {
             <p className="mt-2 text-white/70">Patient Command Center · {roleLabels[staff.role] || staff.role}</p>
           </div>
           <div className="flex flex-wrap gap-2">
+            <Link
+              href={'/concierge/profissional/coordenacao?patient=' + encodeURIComponent(patientId) + '&name=' + encodeURIComponent(patientName)}
+              className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-bold text-slate-950"
+            >
+              <CalendarCheck className="w-4 h-4" /> Coordenar exame / consulta
+            </Link>
             {careLink ? (
               <Link href={`/patient/care-link/${careLink.id}`} className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-3 text-sm font-bold text-slate-950"><FileHeart className="w-4 h-4" /> Contexto clínico autorizado <ExternalLink className="w-4 h-4" /></Link>
             ) : (

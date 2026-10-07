@@ -119,7 +119,10 @@ export default function ConciergeProfessionalPage() {
 
       if (['admin', 'care_coordinator'].includes(self.role)) {
         try {
-          await supabase.rpc('concierge_refresh_time_alerts')
+          await Promise.allSettled([
+            supabase.rpc('concierge_refresh_time_alerts'),
+            supabase.rpc('concierge_refresh_operational_alerts'),
+          ])
         } catch {
           // Alert refresh must never block access to the professional workspace.
         }

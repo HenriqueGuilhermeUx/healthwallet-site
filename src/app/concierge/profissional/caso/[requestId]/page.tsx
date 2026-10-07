@@ -7,6 +7,7 @@ import {
   Activity,
   AlertTriangle,
   ArrowLeft,
+  CalendarCheck,
   CheckCircle2,
   ClipboardList,
   FileHeart,
@@ -139,6 +140,7 @@ export default function ConciergeProfessionalCasePage() {
 
   const canPublish = ['doctor', 'admin'].includes(staff?.role)
   const canCoordinate = ['nurse', 'care_coordinator', 'admin'].includes(staff?.role)
+  const canOpenExternalCoordination = ['nurse', 'care_coordinator', 'admin', 'doctor'].includes(staff?.role)
   const patientName = request?.subject_name || request?.context_snapshot?.patient_name || `Paciente ${String(request?.patient_id || '').slice(0, 8)}`
   const contextMedications = Array.isArray(context?.active_medications) ? context.active_medications : []
   const contextExams = Array.isArray(context?.linked_exams) ? context.linked_exams : []
@@ -346,6 +348,14 @@ export default function ConciergeProfessionalCasePage() {
             <p className="mt-4 text-sm text-white/60">{patientName}</p>
             <h1 className="mt-1 text-3xl md:text-4xl font-bold">{request.title}</h1>
             <p className="mt-3 max-w-3xl text-white/75">{request.description}</p>
+            {canOpenExternalCoordination && (
+              <Link
+                href={'/concierge/profissional/coordenacao?patient=' + encodeURIComponent(request.patient_id) + '&name=' + encodeURIComponent(patientName) + '&request=' + encodeURIComponent(request.id)}
+                className="mt-4 inline-flex items-center gap-2 rounded-xl bg-emerald-400 px-4 py-2.5 text-xs font-bold text-slate-950"
+              >
+                <CalendarCheck className="w-4 h-4" /> Abrir coordenação externa
+              </Link>
+            )}
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/10 p-4 min-w-[240px]">
             <p className="text-xs text-white/60">Próximo passo aberto</p>

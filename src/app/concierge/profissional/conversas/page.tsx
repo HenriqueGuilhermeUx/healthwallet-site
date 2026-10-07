@@ -76,13 +76,33 @@ export default function ConciergeLiveConversationsPage() {
     setLoading(true)
     setUnavailable(false)
     try {
-      const { data: self, error } = await supabase
-        .from('concierge_staff')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle()
+      const [{ data: conciergeSelf, error: conciergeError }, { data: teamSelf, error: teamError }] = await Promise.all([
+        supabase
+          .from('concierge_staff')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+        supabase
+          .from('mydatamed_team_members')
+          .select('user_id,role,display_name,active')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+      ])
 
-      if (error) throw error
+      if (conciergeError) throw conciergeError
+      if (teamError) throw teamError
+
+      const self = conciergeSelf?.active
+        ? conciergeSelf
+        : teamSelf?.active && ['master','admin','care_coordinator','concierge_agent','nurse','doctor'].includes(teamSelf.role)
+          ? {
+              user_id: teamSelf.user_id,
+              role: teamSelf.role,
+              display_name: teamSelf.display_name,
+              active: true,
+            }
+          : null
+
       setStaff(self)
       if (!self?.active) return
 
@@ -260,6 +280,13 @@ export default function ConciergeLiveConversationsPage() {
       || `Paciente ${String(patientId).slice(0, 8)}`
   }
 
+  const subjectLabel = (session: any) => {
+    const subject = session?.metadata?.subject_name
+    const relationship = session?.metadata?.subject_relationship
+    if (!subject) return patientName(session.patient_id)
+    return `${patientName(session.patient_id)} cuidando de ${subject}${relationship ? ` · ${relationship}` : ''}`
+  }
+
   const stats = {
     live: sessions.filter((item) => isOnline(item.last_activity_at)).length,
     human: sessions.filter((item) => item.status === 'human_requested').length,
@@ -330,7 +357,7 @@ export default function ConciergeLiveConversationsPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="truncate font-bold">{patientName(item.patient_id)}</p>
+                      <p className="truncate font-bold">{subjectLabel(item)}</p>
                       {isOnline(item.last_activity_at) && <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700"><Circle className="h-2.5 w-2.5 fill-current" /> AO VIVO</span>}
                     </div>
                     <p className="mt-1 text-xs font-semibold text-gray-600">{statusLabels[item.status] || item.status}</p>
@@ -353,7 +380,7 @@ export default function ConciergeLiveConversationsPage() {
               <div className="border-b pb-4">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
-                    <p className="font-bold">{patientName(selected.patient_id)}</p>
+                    <p className="font-bold">{subjectLabel(selected)}</p>
                     <p className="mt-1 text-xs text-gray-500">{statusLabels[selected.status] || selected.status} · última atividade {formatTime(selected.last_activity_at)}</p>
                   </div>
                   <div className="flex flex-wrap gap-2">

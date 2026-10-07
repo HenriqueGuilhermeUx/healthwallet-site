@@ -482,31 +482,31 @@ export default function ConciergeNavigationPage() {
               )}
 
               <section className="grid gap-4 md:grid-cols-2">
-                <Field label="Operadora"><input value={draft.insurer_name || ''} onChange={(e) => setDraft({ ...draft, insurer_name: e.target.value })} className="input" /></Field>
-                <Field label="Plano"><input value={draft.plan_name || ''} onChange={(e) => setDraft({ ...draft, plan_name: e.target.value })} className="input" /></Field>
-                <Field label="Protocolo"><input value={draft.protocol_number || ''} onChange={(e) => setDraft({ ...draft, protocol_number: e.target.value })} className="input" /></Field>
+                <Field label="Operadora"><input value={draft.insurer_name || ''} onChange={(e) => setDraft({ ...draft, insurer_name: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" /></Field>
+                <Field label="Plano"><input value={draft.plan_name || ''} onChange={(e) => setDraft({ ...draft, plan_name: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" /></Field>
+                <Field label="Protocolo"><input value={draft.protocol_number || ''} onChange={(e) => setDraft({ ...draft, protocol_number: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" /></Field>
                 <Field label="Status">
-                  <select value={draft.status || 'new'} onChange={(e) => setDraft({ ...draft, status: e.target.value })} className="input">
+                  <select value={draft.status || 'new'} onChange={(e) => setDraft({ ...draft, status: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100">
                     {Object.entries(statusLabels).map(([value,label]) => <option key={value} value={value}>{label}</option>)}
                   </select>
                 </Field>
                 <Field label="Regra / playbook de prazo">
-                  <select value={draft.regulatory_rule_code || ''} onChange={(e) => { setDraft({ ...draft, regulatory_rule_code: e.target.value }); if (e.target.value) estimateDeadline(e.target.value) }} className="input">
+                  <select value={draft.regulatory_rule_code || ''} onChange={(e) => { setDraft({ ...draft, regulatory_rule_code: e.target.value }); if (e.target.value) estimateDeadline(e.target.value) }} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100">
                     <option value="">Sem regra selecionada</option>
                     {playbooks.map((rule) => <option key={rule.rule_code} value={rule.rule_code}>{rule.title}{rule.max_business_days ? ` · ${rule.max_business_days} dias úteis` : ''}</option>)}
                   </select>
                 </Field>
                 <Field label="Prazo regulatório">
-                  <input type="datetime-local" value={draft.regulatory_deadline_at || ''} onChange={(e) => setDraft({ ...draft, regulatory_deadline_at: e.target.value })} className="input" />
+                  <input type="datetime-local" value={draft.regulatory_deadline_at || ''} onChange={(e) => setDraft({ ...draft, regulatory_deadline_at: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" />
                   <label className="mt-2 flex items-center gap-2 text-xs"><input type="checkbox" checked={Boolean(draft.deadline_confirmed)} onChange={(e) => setDraft({ ...draft, deadline_confirmed: e.target.checked })} /> Prazo conferido pela equipe (inclusive feriados)</label>
                 </Field>
-                <Field label="Próximo follow-up"><input type="datetime-local" value={draft.next_followup_at || ''} onChange={(e) => setDraft({ ...draft, next_followup_at: e.target.value })} className="input" /></Field>
-                <Field label="Valor solicitado"><input type="number" step="0.01" value={draft.amount_requested ?? ''} onChange={(e) => setDraft({ ...draft, amount_requested: e.target.value })} className="input" /></Field>
-                <Field label="Valor reembolsado"><input type="number" step="0.01" value={draft.amount_reimbursed ?? ''} onChange={(e) => setDraft({ ...draft, amount_reimbursed: e.target.value })} className="input" /></Field>
+                <Field label="Próximo follow-up"><input type="datetime-local" value={draft.next_followup_at || ''} onChange={(e) => setDraft({ ...draft, next_followup_at: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" /></Field>
+                <Field label="Valor solicitado"><input type="number" step="0.01" value={draft.amount_requested ?? ''} onChange={(e) => setDraft({ ...draft, amount_requested: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" /></Field>
+                <Field label="Valor reembolsado"><input type="number" step="0.01" value={draft.amount_reimbursed ?? ''} onChange={(e) => setDraft({ ...draft, amount_reimbursed: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" /></Field>
               </section>
 
               <Field label="Resultado / observação">
-                <textarea rows={3} value={draft.outcome || ''} onChange={(e) => setDraft({ ...draft, outcome: e.target.value })} className="input resize-none" />
+                <textarea rows={3} value={draft.outcome || ''} onChange={(e) => setDraft({ ...draft, outcome: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100 resize-none" />
               </Field>
 
               <div className="flex flex-wrap gap-2">

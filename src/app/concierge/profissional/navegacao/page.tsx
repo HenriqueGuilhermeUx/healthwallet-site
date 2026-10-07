@@ -401,43 +401,241 @@ export default function ConciergeNavigationPage() {
     }
   }
 
-  async function prepareNip() {
-    if (!selected || !user) return
-    const assistential = ['provider_search','scheduling','insurance_authorization','claim_denial','hospitalization','surgery','complex_case'].includes(selected.case_type)
-    const days = assistential ? 5 : 10
-    const date = new Date()
+  async function businessDeadline(startDate: Date, days: number) {
+    try {
+      const { data, error } = await supabase.rpc('concierge_compute_business_deadline', {
+        p_start_date: startDate.toISOString().slice(0, 10),
+        p_business_days: days,
+        p_state_code: selected?.metadata?.state_code || null,
+        p_city_name: selected?.metadata?.city_name || null,
+      })
+      if (!error && data) return new Date(String(data) + 'T18:00:00')
+    } catch {
+      // Fallback below keeps the workflow usable before local holiday setup.
+    }
+
+    const date = new Date(startDate)
     let left = days
     while (left > 0) {
       date.setDate(date.getDate() + 1)
-      if (![0,6].includes(date.getDay())) left -= 1
+      if (![0, 6].includes(date.getDay())) left -= 1
+    }
+    return date
+  }
+
+  function buildNipNarrative(item: any, activeGuide: any) {
+    const protocol = draft.protocol_number || item.protocol_number || 'não informado'
+    const insurer = draft.insurer_name || item.insurer_name || 'operadora não informada'
+    const patient = patientName(item.patient_id)
+    const outcome = draft.outcome || item.outcome || item.description || 'demanda ainda não solucionada'
+
+    return [
+      `Beneficiário: ${patient}.`,
+      `Operadora: ${insurer}.`,
+      `Protocolo prévio na operadora: ${protocol}.`,
+      `Demanda: ${item.title}.`,
+      `Situação atual: ${outcome}.`,
+      activeGuide?.patient_answer ? `Referência operacional utilizada: ${activeGuide.topic}.` : '',
+      'Solicitação: intermediação para que a operadora apresente solução clara e conclusiva à demanda, observados o contrato e a regulamentação aplicável.',
+      'Esta narrativa registra fatos e pedido administrativo; não contém parecer jurídico individualizado.',
+    ].filter(Boolean).join('\n')
+  }
+
+  async function prepareNip() {
+    if (!selected || !user) return
+
+    const protocol = String(draft.protocol_number || selected.protocol_number || '').trim()
+    if (!protocol) {
+      toast.error('Registre primeiro o protocolo prévio da operadora. Ele é essencial para o fluxo NIP.')
+      return
     }
 
-    const { error } = await supabase.from('concierge_operational_cases').update({
-      status: 'escalated_ans',
-      next_followup_at: date.toISOString(),
-      metadata: {
-        ...(selected.metadata || {}),
-        nip_prepared: true,
-        nip_classification: assistential ? 'assistential' : 'non_assistential',
-        nip_followup_business_days: days,
-      },
-    }).eq('id', selected.id)
+    const assistential = ['provider_search','scheduling','insurance_authorization','claim_denial','hospitalization','surgery','complex_case'].includes(selected.case_type)
+    const narrative = buildNipNarrative(selected, guide)
+    const requestedOutcome = 'Solicito solução administrativa objetiva para a demanda e resposta clara sobre cobertura, autorização, agendamento ou providência aplicável.'
 
-    if (error) return toast.error('Não foi possível preparar o fluxo NIP.')
+    const signedRepresentation = documents.some((doc) =>
+      ['representation_authorization','combined_onboarding'].includes(doc.document_type)
+      && doc.status === 'signed'
+    )
+
+    const snapshot = {
+      case_type: selected.case_type,
+      insurer_name: draft.insurer_name || selected.insurer_name || null,
+      operator_protocol: protocol,
+      guide_code: guide?.guide_code || null,
+      required_documents: guide?.required_documents || [],
+      checklist_done: checklist.filter((item) => item.status === 'done').map((item) => item.item_key),
+      representation_signed: signedRepresentation,
+      nip_classification: assistential ? 'assistential' : 'non_assistential',
+      response_business_days: assistential ? 5 : 10,
+    }
+
+    const { data: existing } = await supabase
+      .from('concierge_case_escalations')
+      .select('id')
+      .eq('case_id', selected.id)
+      .eq('escalation_type', 'ans_nip')
+      .in('status', ['draft','ready'])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    const payload = {
+      case_id: selected.id,
+      patient_id: selected.patient_id,
+      escalation_type: 'ans_nip',
+      status: 'ready',
+      narrative,
+      requested_outcome: requestedOutcome,
+      created_by: user.id,
+      assigned_to: user.id,
+      visibility: 'patient',
+      snapshot,
+      metadata: {
+        representation_signed: signedRepresentation,
+        prepared_from: 'mydatamed_navigation_cockpit',
+      },
+    }
+
+    const result = existing?.id
+      ? await supabase.from('concierge_case_escalations').update(payload).eq('id', existing.id).select('*').single()
+      : await supabase.from('concierge_case_escalations').insert(payload).select('*').single()
+
+    if (result.error) {
+      console.error(result.error)
+      return toast.error('Não foi possível preparar o pacote NIP.')
+    }
+
+    const packet = [
+      'PACOTE NIP — MYDATAMED CONCIERGE',
+      '',
+      narrative,
+      '',
+      `Resultado solicitado: ${requestedOutcome}`,
+      '',
+      `Classificação: ${assistential ? 'assistencial (acompanhamento em 5 dias úteis)' : 'não assistencial (acompanhamento em 10 dias úteis)'}.`,
+      `Representação administrativa assinada: ${signedRepresentation ? 'sim' : 'não — obter antes de atuar em nome do cliente, quando necessária'}.`,
+    ].join('\n')
+
+    await navigator.clipboard.writeText(packet).catch(() => undefined)
 
     await supabase.from('concierge_case_events').insert({
       case_id: selected.id,
       patient_id: selected.patient_id,
       actor_user_id: user.id,
       actor_role: 'concierge',
-      event_type: 'nip_prepared',
+      event_type: 'nip_packet_ready',
       visibility: 'staff_only',
-      message: `Fluxo NIP preparado como demanda ${assistential ? 'assistencial' : 'não assistencial'}. Confirmar protocolo prévio e autorização de representação antes do registro.`,
-      payload: { followup_business_days: days },
+      message: 'Pacote NIP preparado para conferência e protocolo humano.',
+      payload: snapshot,
     })
-    toast.success('Fluxo NIP preparado. O registro externo continua sujeito à conferência humana.')
+
+    toast.success('Pacote NIP pronto e copiado. Revise e protocole no canal oficial da ANS.')
+    await loadDetail(selected.id)
+  }
+
+  async function markNipSubmitted(escalation: any) {
+    if (!selected || !user) return
+    const protocol = window.prompt('Informe o número da demanda/NIP registrado na ANS:')
+    if (!protocol?.trim()) return
+
+    const days = Number(escalation?.snapshot?.response_business_days || 5)
+    const submittedAt = new Date()
+    const responseDue = await businessDeadline(submittedAt, days)
+
+    const { error } = await supabase
+      .from('concierge_case_escalations')
+      .update({
+        status: 'waiting_response',
+        protocol_number: protocol.trim(),
+        submitted_at: submittedAt.toISOString(),
+        response_due_at: responseDue.toISOString(),
+      })
+      .eq('id', escalation.id)
+
+    if (error) return toast.error('Não foi possível registrar o protocolo da NIP.')
+
+    await supabase.from('concierge_operational_cases').update({
+      status: 'escalated_ans',
+      next_followup_at: responseDue.toISOString(),
+      metadata: {
+        ...(selected.metadata || {}),
+        nip_protocol: protocol.trim(),
+        nip_submitted_at: submittedAt.toISOString(),
+      },
+    }).eq('id', selected.id)
+
+    await supabase.from('concierge_case_events').insert({
+      case_id: selected.id,
+      patient_id: selected.patient_id,
+      actor_user_id: user.id,
+      actor_role: 'concierge',
+      event_type: 'nip_submitted',
+      visibility: 'patient',
+      message: 'A reclamação administrativa na ANS foi registrada e está sendo acompanhada.',
+      payload: {
+        nip_protocol: protocol.trim(),
+        response_due_at: responseDue.toISOString(),
+        response_business_days: days,
+      },
+    })
+
+    toast.success('NIP registrada. O follow-up foi programado automaticamente.')
     await loadCases()
-    await selectCase(selected.id)
+    await loadDetail(selected.id)
+  }
+
+  async function linkIntakeToSelectedCase(intake: any) {
+    if (!selected || !user) return
+
+    const allowedDocs = new Set([
+      'medical_order','medical_report','insurance_card','receipt_invoice',
+      'proof_of_payment','authorization','denial','reimbursement_form','other',
+    ])
+    const documentType = allowedDocs.has(intake.document_type) ? intake.document_type : 'other'
+
+    const { error } = await supabase
+      .from('concierge_document_intake')
+      .update({
+        case_id: selected.id,
+        status: 'linked',
+        reviewed_by: user.id,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq('id', intake.id)
+
+    if (error) return toast.error('Não foi possível vincular o documento.')
+
+    await supabase.from('concierge_case_documents').insert({
+      case_id: selected.id,
+      patient_id: selected.patient_id,
+      document_type: documentType,
+      label: intake.original_filename || intake.document_type || 'Documento recebido',
+      status: 'received',
+      uploaded_by: user.id,
+      metadata: {
+        intake_id: intake.id,
+        storage_bucket: intake.storage_bucket,
+        storage_path: intake.storage_path,
+        extracted_fields: intake.extracted_fields || {},
+        extraction_confidence: intake.extraction_confidence,
+      },
+    })
+
+    await supabase.from('concierge_case_events').insert({
+      case_id: selected.id,
+      patient_id: selected.patient_id,
+      actor_user_id: user.id,
+      actor_role: 'concierge',
+      event_type: 'document_linked',
+      visibility: 'staff_only',
+      message: `Documento vinculado ao caso: ${intake.original_filename || documentType}.`,
+      payload: { intake_id: intake.id, document_type: documentType },
+    })
+
+    toast.success('Documento revisado e vinculado ao caso.')
+    await Promise.all([loadIntakes(), loadDetail(selected.id)])
   }
 
   const filtered = useMemo(() => {

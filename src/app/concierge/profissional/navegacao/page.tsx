@@ -767,6 +767,40 @@ export default function ConciergeNavigationPage() {
                 </section>
               )}
 
+              {checklist.length > 0 && (
+                <section className="rounded-2xl border bg-white p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <ClipboardList className="h-5 w-5 text-emerald-700" />
+                      <h3 className="font-bold">Checklist executável</h3>
+                    </div>
+                    <span className="text-xs font-bold text-emerald-700">
+                      {checklist.filter((item) => item.status === 'done').length}/{checklist.length}
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {checklist.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => void toggleChecklist(item)}
+                        className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition ${item.status === 'done' ? 'border-emerald-200 bg-emerald-50' : item.category === 'boundary' ? 'border-amber-200 bg-amber-50' : 'bg-slate-50 hover:border-emerald-200'}`}
+                      >
+                        <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${item.status === 'done' ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 bg-white'}`}>
+                          {item.status === 'done' && <CheckCircle2 className="h-3.5 w-3.5" />}
+                        </div>
+                        <div>
+                          <p className={`text-sm ${item.status === 'done' ? 'font-semibold text-emerald-950 line-through opacity-70' : 'font-medium text-gray-800'}`}>{item.label}</p>
+                          <p className="mt-1 text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                            {item.category === 'document' ? 'Documento' : item.category === 'boundary' ? 'Limite de atuação' : 'Ação'}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+              )}
+
               <section className="grid gap-4 md:grid-cols-2">
                 <Field label="Operadora"><input value={draft.insurer_name || ''} onChange={(e) => setDraft({ ...draft, insurer_name: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" /></Field>
                 <Field label="Plano"><input value={draft.plan_name || ''} onChange={(e) => setDraft({ ...draft, plan_name: e.target.value })} className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100" /></Field>

@@ -10,6 +10,7 @@ import {
   Clock3,
   Loader2,
   MapPin,
+  RefreshCw,
   Search,
   Stethoscope,
   UserCheck,
@@ -217,10 +218,35 @@ export default function ExternalCoordinationPage() {
     }
   }
 
+  const prioritizedTasks = useMemo(() => {
+    const rank: Record<string, number> = {
+      selected: 0,
+      scheduling: 1,
+      new: 2,
+      researching: 3,
+      options_ready: 4,
+      awaiting_patient_choice: 5,
+      booked: 6,
+      instructions_sent: 7,
+      completed: 8,
+      result_expected: 9,
+      result_received: 10,
+      closed: 11,
+      cancelled: 12,
+    }
+
+    return [...tasks].sort((a, b) => {
+      const statusDiff = (rank[a.status] ?? 99) - (rank[b.status] ?? 99)
+      if (statusDiff !== 0) return statusDiff
+      return String(a.created_at || '').localeCompare(String(b.created_at || ''))
+    })
+  }, [tasks])
+
   const stats = useMemo(() => ({
     open: tasks.filter((item) => !['closed', 'cancelled'].includes(item.status)).length,
     searching: tasks.filter((item) => ['new', 'researching'].includes(item.status)).length,
     patient: tasks.filter((item) => ['options_ready', 'awaiting_patient_choice'].includes(item.status)).length,
+    readyToBook: tasks.filter((item) => ['selected', 'scheduling'].includes(item.status)).length,
     booked: tasks.filter((item) => ['booked', 'instructions_sent', 'completed', 'result_expected'].includes(item.status)).length,
   }), [tasks])
 
@@ -244,19 +270,25 @@ export default function ExternalCoordinationPage() {
   return (
     <main className="max-w-7xl mx-auto px-4 py-8 space-y-6">
       <section className="overflow-hidden rounded-[2rem] bg-gradient-to-br from-slate-950 via-blue-950 to-emerald-900 p-7 md:p-9 text-white shadow-xl">
-        <div className="max-w-4xl">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div className="max-w-4xl">
           <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-semibold text-emerald-100">
             <CalendarCheck className="w-4 h-4" /> Concierge · Coordenação Externa
           </div>
           <h1 className="mt-4 text-3xl md:text-4xl font-bold">Do pedido ao resultado, sem perder o próximo passo.</h1>
           <p className="mt-3 text-white/75">Pesquisa de prestadores, opções, escolha do paciente, agendamento, preparo, realização, resultado e fechamento do loop.</p>
+          </div>
+          <button onClick={load} className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-semibold text-white hover:bg-white/15">
+            <RefreshCw className="w-4 h-4" /> Atualizar fila
+          </button>
         </div>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-4">
+      <section className="grid gap-3 sm:grid-cols-5">
         <Metric label="Em aberto" value={stats.open} icon={ClipboardList} />
         <Metric label="Pesquisar" value={stats.searching} icon={Search} />
-        <Metric label="Com paciente" value={stats.patient} icon={UserCheck} />
+        <Metric label="Aguardando paciente" value={stats.patient} icon={UserCheck} />
+        <Metric label="Pronto para agendar" value={stats.readyToBook} icon={CalendarCheck} />
         <Metric label="Agendados / execução" value={stats.booked} icon={CalendarCheck} />
       </section>
 
@@ -308,7 +340,7 @@ export default function ExternalCoordinationPage() {
 
           <div className="mt-5 space-y-3">
             {tasks.length === 0 && <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-gray-500">Nenhuma coordenação disponível.</div>}
-            {tasks.map((task) => (
+            {prioritizedTasks.map((task) => (
               <div key={task.id} className="rounded-2xl border bg-gray-50 p-4">
                 <div className="flex items-start gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-emerald-700 border"><Stethoscope className="w-5 h-5" /></div>
@@ -316,6 +348,7 @@ export default function ExternalCoordinationPage() {
                     <div className="flex flex-wrap items-center gap-2">
                       <span className={'rounded-full px-2 py-0.5 text-[11px] font-semibold ' + statusTone(task.status)}>{STATUS_LABELS[task.status] || task.status}</span>
                       {task.assigned_to === user?.id && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-800">Com você</span>}
+                      {task.status === 'selected' && <span className="rounded-full bg-fuchsia-100 px-2 py-0.5 text-[11px] font-bold text-fuchsia-800">PACIENTE ESCOLHEU</span>}
                     </div>
                     <p className="mt-2 font-bold text-gray-900">{task.title}</p>
                     <p className="mt-1 text-sm text-gray-600">{task.patient_name || ('Paciente ' + String(task.patient_id).slice(0, 8))}</p>

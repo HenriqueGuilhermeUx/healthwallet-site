@@ -78,13 +78,29 @@ export default function ConciergeLiveConversationsPage() {
   }, [user?.id])
 
   useEffect(() => {
-    if (!staff?.active) return
+    if (!staff?.active || !user) return
+
+    const channel = supabase
+      .channel(`concierge-live-${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'concierge_chat_sessions' }, () => {
+        void loadQueue(false)
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'concierge_chat_messages' }, (payload: any) => {
+        if (selectedId && payload.new?.session_id === selectedId) void loadMessages(selectedId)
+        void loadQueue(false)
+      })
+      .subscribe()
+
     const timer = window.setInterval(() => {
       void loadQueue(false)
       if (selectedId) void loadMessages(selectedId)
-    }, 5000)
-    return () => window.clearInterval(timer)
-  }, [staff?.active, selectedId])
+    }, 15000)
+
+    return () => {
+      window.clearInterval(timer)
+      void supabase.removeChannel(channel)
+    }
+  }, [staff?.active, selectedId, user?.id])
 
   async function bootstrap() {
     if (!user) return

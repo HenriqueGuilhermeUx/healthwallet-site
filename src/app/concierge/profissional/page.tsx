@@ -11,6 +11,7 @@ import {
   Clock3,
   HeartPulse,
   Loader2,
+  MessageCircle,
   ShieldCheck,
   Stethoscope,
   Target,
@@ -83,6 +84,7 @@ export default function ConciergeProfessionalPage() {
   const [alerts, setAlerts] = useState<any[]>([])
   const [events, setEvents] = useState<any[]>([])
   const [assignments, setAssignments] = useState<any[]>([])
+  const [chatSessions, setChatSessions] = useState<any[]>([])
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/login')
@@ -145,6 +147,18 @@ export default function ConciergeProfessionalPage() {
       setAlerts(alertRes.data || [])
       setEvents(eventRes.data || [])
       setAssignments(assignmentRes.data || [])
+
+      try {
+        const { data: chats } = await supabase
+          .from('concierge_chat_sessions')
+          .select('id,patient_id,status,last_activity_at,attention_reason')
+          .neq('status', 'closed')
+          .order('last_activity_at', { ascending: false })
+          .limit(100)
+        setChatSessions(chats || [])
+      } catch {
+        setChatSessions([])
+      }
     } catch (error) {
       console.error('MyDataMed Concierge professional workspace unavailable:', error)
       setStaff(null)
@@ -196,6 +210,9 @@ export default function ConciergeProfessionalPage() {
     attention: roleRequests.filter((item) => item.urgency === 'priority').length + alerts.filter((item) => ['attention', 'high'].includes(item.severity)).length,
     medical: roleRequests.filter((item) => ['escalated_medical', 'medical_review'].includes(item.status)).length,
     patients: visiblePatients.length,
+    liveChats: chatSessions.filter((item) => Date.now() - new Date(item.last_activity_at).getTime() < 2 * 60 * 1000).length,
+    humanChats: chatSessions.filter((item) => item.status === 'human_requested').length,
+    attentionChats: chatSessions.filter((item) => item.status === 'attention').length,
   }
 
   if (authLoading || loading) {
@@ -242,6 +259,25 @@ export default function ConciergeProfessionalPage() {
           </div>
         </div>
       </section>
+
+      {chatSessions.length > 0 && (
+        <Link href="/concierge/profissional/conversas" className="block rounded-3xl border border-violet-200 bg-violet-50 p-5 transition hover:border-violet-300">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700"><MessageCircle className="h-5 w-5" /></div>
+              <div>
+                <p className="font-bold text-violet-950">Conversas Concierge acontecendo agora</p>
+                <p className="mt-1 text-sm text-violet-900/75">A IA atende primeiro, mas sua equipe pode acompanhar e entrar proativamente quando necessário.</p>
+              </div>
+            </div>
+            <div className="flex gap-2 text-xs font-bold">
+              {stats.liveChats > 0 && <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-800">{stats.liveChats} ao vivo</span>}
+              {stats.humanChats > 0 && <span className="rounded-full bg-blue-100 px-3 py-1.5 text-blue-800">{stats.humanChats} pediram humano</span>}
+              {stats.attentionChats > 0 && <span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-800">{stats.attentionChats} atenção</span>}
+            </div>
+          </div>
+        </Link>
+      )}
 
       <section className="grid gap-4 md:grid-cols-4">
         <SignalCard icon={AlertTriangle} title="Agora" value={stats.actionNow} text="Redirecionamentos e situações que não podem ficar escondidos na lista." tone="red" />

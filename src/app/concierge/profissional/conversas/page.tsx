@@ -20,6 +20,21 @@ import { toast } from 'sonner'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 
+const complexTypes = new Set(['insurance_authorization','reimbursement','claim_denial','hospitalization','surgery','complex_case','caregiver_coordination'])
+
+const operationalLabels: Record<string, string> = {
+  insurance_authorization: 'Autorização',
+  reimbursement: 'Reembolso',
+  claim_denial: 'Glosa / negativa',
+  hospitalization: 'Internação',
+  surgery: 'Cirurgia',
+  complex_case: 'Caso complexo',
+  caregiver_coordination: 'Cuidado familiar',
+  provider_search: 'Busca de prestador',
+  scheduling: 'Agendamento',
+  general_navigation: 'Navegação',
+}
+
 const statusLabels: Record<string, string> = {
   ai_active: 'IA atendendo',
   attention: 'Precisa atenção',
@@ -264,7 +279,15 @@ export default function ConciergeLiveConversationsPage() {
 
   const queue = useMemo(
     () => [...sessions].sort((a, b) => {
-      const priority = (item: any) => item.status === 'human_requested' ? 4 : item.status === 'attention' ? 3 : item.status === 'human_active' ? 2 : 1
+      const priority = (item: any) => {
+        if (item.status === 'human_requested') return 60
+        if (item.metadata?.attention_level === 'high') return 55
+        if (complexTypes.has(item.metadata?.operational_type)) return 50
+        if (item.status === 'attention') return 40
+        if (item.status === 'human_active') return 30
+        if (item.metadata?.attention_level === 'watch') return 20
+        return 10
+      }
       const byPriority = priority(b) - priority(a)
       return byPriority || String(b.last_activity_at || '').localeCompare(String(a.last_activity_at || ''))
     }),
@@ -360,7 +383,15 @@ export default function ConciergeLiveConversationsPage() {
                       <p className="truncate font-bold">{subjectLabel(item)}</p>
                       {isOnline(item.last_activity_at) && <span className="inline-flex items-center gap-1 text-[10px] font-bold text-emerald-700"><Circle className="h-2.5 w-2.5 fill-current" /> AO VIVO</span>}
                     </div>
-                    <p className="mt-1 text-xs font-semibold text-gray-600">{statusLabels[item.status] || item.status}</p>
+                    <div className="mt-1 flex flex-wrap gap-1.5 text-[10px] font-bold">
+                      <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">{statusLabels[item.status] || item.status}</span>
+                      {item.metadata?.operational_type && operationalLabels[item.metadata.operational_type] && (
+                        <span className={`rounded-full px-2 py-1 ${complexTypes.has(item.metadata.operational_type) ? 'bg-rose-100 text-rose-800' : 'bg-blue-50 text-blue-700'}`}>
+                          {operationalLabels[item.metadata.operational_type]}
+                        </span>
+                      )}
+                      {item.metadata?.attention_level === 'high' && <span className="rounded-full bg-amber-100 px-2 py-1 text-amber-800">PRIORIDADE</span>}
+                    </div>
                     {item.attention_reason && <p className="mt-1 line-clamp-2 text-xs text-amber-700">{item.attention_reason}</p>}
                     <p className="mt-2 flex items-center gap-1 text-[11px] text-gray-400"><Clock3 className="h-3 w-3" /> {formatTime(item.last_activity_at)}</p>
                   </div>

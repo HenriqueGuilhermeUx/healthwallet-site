@@ -902,8 +902,44 @@ export default function ConciergeNavigationPage() {
 
               <div className="flex flex-wrap gap-2">
                 <button onClick={() => void saveCase()} disabled={saving} className="rounded-xl bg-emerald-700 px-4 py-2.5 text-sm font-bold text-white disabled:opacity-50">{saving ? <Loader2 className="mr-2 inline h-4 w-4 animate-spin" /> : <Save className="mr-2 inline h-4 w-4" />}Salvar caso</button>
+                <button onClick={() => void createAdministrativeEscalation('operator_ombudsman')} className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2.5 text-sm font-bold text-blue-800">Preparar Ouvidoria</button>
                 <button onClick={() => void prepareNip()} className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm font-bold text-amber-900"><ShieldCheck className="mr-2 inline h-4 w-4" />Preparar NIP</button>
+                <button onClick={() => void createAdministrativeEscalation('procon')} className="rounded-xl border border-orange-200 bg-orange-50 px-4 py-2.5 text-sm font-bold text-orange-800">Preparar Procon</button>
+                <button onClick={() => void createAdministrativeEscalation('legal_referral')} className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-bold text-rose-800">Encaminhar jurídico</button>
               </div>
+
+              {escalations.length > 0 && (
+                <section className="rounded-2xl border bg-white p-4">
+                  <div className="flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5 text-amber-700" />
+                    <h3 className="font-bold">Escalonamentos</h3>
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {escalations.map((item) => (
+                      <div key={item.id} className="rounded-xl border bg-slate-50 p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-bold text-gray-900">{{
+                              operator_sac: 'SAC',
+                              operator_ombudsman: 'Ouvidoria',
+                              ans_nip: 'ANS / NIP',
+                              procon: 'Procon',
+                              legal_referral: 'Jurídico',
+                              clinical_referral: 'Clínico',
+                            }[item.escalation_type] || item.escalation_type}</p>
+                            <p className="mt-1 text-xs text-gray-500">{item.status}{item.protocol_number ? ` · protocolo ${item.protocol_number}` : ''}</p>
+                          </div>
+                          {item.escalation_type === 'ans_nip' && item.status === 'ready' && (
+                            <button onClick={() => void markNipSubmitted(item)} className="rounded-lg bg-amber-700 px-3 py-2 text-xs font-bold text-white">Registrar protocolo NIP</button>
+                          )}
+                        </div>
+                        {item.response_due_at && <p className="mt-2 text-xs font-semibold text-amber-700">Resposta acompanhada até {fmt(item.response_due_at)}</p>}
+                        {item.narrative && <p className="mt-2 whitespace-pre-wrap rounded-lg bg-white p-2 text-xs text-gray-600">{item.narrative}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
 
               <section className="rounded-2xl border bg-slate-50 p-4">
                 <div className="flex items-center gap-2"><FileSignature className="h-5 w-5 text-indigo-700" /><h3 className="font-bold">Documentos e representação</h3></div>

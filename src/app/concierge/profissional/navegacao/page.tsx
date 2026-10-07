@@ -586,6 +586,77 @@ export default function ConciergeNavigationPage() {
     await loadDetail(selected.id)
   }
 
+  async function createAdministrativeEscalation(type: 'operator_ombudsman'|'procon'|'legal_referral'|'clinical_referral') {
+    if (!selected || !user) return
+
+    const labels: Record<string, string> = {
+      operator_ombudsman: 'Ouvidoria da operadora',
+      procon: 'Procon / defesa do consumidor',
+      legal_referral: 'Encaminhamento jurídico',
+      clinical_referral: 'Encaminhamento clínico',
+    }
+
+    const protocol = String(draft.protocol_number || selected.protocol_number || '').trim()
+    const administrative = ['operator_ombudsman','procon'].includes(type)
+
+    if (administrative && !protocol) {
+      toast.error('Registre o protocolo prévio da operadora antes de preparar este escalonamento.')
+      return
+    }
+
+    const narrative = [
+      `Paciente: ${patientName(selected.patient_id)}.`,
+      `Caso: ${selected.title}.`,
+      draft.insurer_name || selected.insurer_name ? `Operadora: ${draft.insurer_name || selected.insurer_name}.` : '',
+      protocol ? `Protocolo anterior: ${protocol}.` : '',
+      draft.outcome || selected.outcome || selected.description ? `Situação: ${draft.outcome || selected.outcome || selected.description}.` : '',
+      `Próximo nível: ${labels[type]}.`,
+    ].filter(Boolean).join('\n')
+
+    const { data, error } = await supabase
+      .from('concierge_case_escalations')
+      .insert({
+        case_id: selected.id,
+        patient_id: selected.patient_id,
+        escalation_type: type,
+        status: 'ready',
+        narrative,
+        requested_outcome: type === 'legal_referral'
+          ? 'Avaliar necessidade de orientação ou medida jurídica individualizada fora do escopo administrativo do Concierge.'
+          : type === 'clinical_referral'
+            ? 'Avaliar a questão clínica por profissional habilitado.'
+            : 'Solicitar revisão e solução administrativa da demanda.',
+        created_by: user.id,
+        assigned_to: user.id,
+        visibility: type === 'legal_referral' || type === 'clinical_referral' ? 'staff_only' : 'patient',
+        snapshot: {
+          guide_code: guide?.guide_code || null,
+          protocol_number: protocol || null,
+          checklist_done: checklist.filter((item) => item.status === 'done').map((item) => item.item_key),
+        },
+        metadata: { prepared_from: 'mydatamed_navigation_cockpit' },
+      })
+      .select('*')
+      .single()
+
+    if (error) return toast.error('Não foi possível preparar o escalonamento.')
+
+    await supabase.from('concierge_case_events').insert({
+      case_id: selected.id,
+      patient_id: selected.patient_id,
+      actor_user_id: user.id,
+      actor_role: 'concierge',
+      event_type: 'escalation_prepared',
+      visibility: 'staff_only',
+      message: `${labels[type]} preparado para revisão.`,
+      payload: { escalation_id: data.id, escalation_type: type },
+    })
+
+    await navigator.clipboard.writeText(narrative).catch(() => undefined)
+    toast.success(`${labels[type]} preparado e narrativa copiada.`)
+    await loadDetail(selected.id)
+  }
+
   async function linkIntakeToSelectedCase(intake: any) {
     if (!selected || !user) return
 

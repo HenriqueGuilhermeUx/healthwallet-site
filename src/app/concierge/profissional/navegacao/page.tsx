@@ -977,6 +977,55 @@ export default function ConciergeNavigationPage() {
       </section>
 
       <section className="rounded-3xl border bg-white p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <div className="flex items-center gap-2"><FileSignature className="h-5 w-5 text-blue-700" /><h2 className="font-bold">Documentos para revisar</h2></div>
+            <p className="mt-1 text-xs text-gray-500">Fotos, pedidos, notas e documentos recebidos no app/WhatsApp com OCR administrativo.</p>
+          </div>
+          <span className="rounded-full bg-blue-50 px-3 py-1.5 text-xs font-bold text-blue-700">{intakes.length} pendentes</span>
+        </div>
+
+        {intakes.length === 0 ? (
+          <div className="mt-4 rounded-2xl border border-dashed p-6 text-center text-sm text-gray-500">Nenhum documento aguardando revisão.</div>
+        ) : (
+          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {intakes.map((item) => (
+              <div key={item.id} className="rounded-2xl border p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="truncate font-bold text-gray-900">{item.original_filename || 'Documento recebido'}</p>
+                    <p className="mt-1 text-xs text-gray-500">{item.channel} · {fmt(item.created_at)}</p>
+                  </div>
+                  <span className={`rounded-full px-2 py-1 text-[10px] font-bold ${Number(item.extraction_confidence || 0) >= 0.7 ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'}`}>
+                    {item.document_type || 'a revisar'}
+                  </span>
+                </div>
+
+                {item.metadata?.extraction_summary && <p className="mt-3 text-sm leading-relaxed text-gray-700">{item.metadata.extraction_summary}</p>}
+                {item.extracted_fields && Object.keys(item.extracted_fields).length > 0 && (
+                  <div className="mt-3 rounded-xl bg-slate-50 p-3 text-xs text-gray-600">
+                    {item.extracted_fields.insurer_name && <p><strong>Operadora:</strong> {item.extracted_fields.insurer_name}</p>}
+                    {item.extracted_fields.procedure_name && <p><strong>Procedimento:</strong> {item.extracted_fields.procedure_name}</p>}
+                    {item.extracted_fields.provider_name && <p><strong>Prestador:</strong> {item.extracted_fields.provider_name}</p>}
+                    {item.extracted_fields.amount != null && <p><strong>Valor:</strong> {Number(item.extracted_fields.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</p>}
+                    {item.extracted_fields.denial_reason && <p><strong>Negativa:</strong> {item.extracted_fields.denial_reason}</p>}
+                  </div>
+                )}
+
+                {selected ? (
+                  <button onClick={() => void linkIntakeToSelectedCase(item)} className="mt-3 w-full rounded-xl bg-blue-700 px-3 py-2.5 text-xs font-bold text-white">
+                    Vincular ao caso selecionado
+                  </button>
+                ) : (
+                  <p className="mt-3 rounded-xl bg-amber-50 p-2 text-center text-xs text-amber-800">Selecione um caso acima para vincular.</p>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-3xl border bg-white p-5">
         <div className="flex items-center gap-2"><BookOpenCheck className="h-5 w-5 text-violet-700" /><h2 className="font-bold">Respostas rápidas e playbooks</h2></div>
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {guides.map((item) => (

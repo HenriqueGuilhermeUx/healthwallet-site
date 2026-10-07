@@ -103,6 +103,9 @@ export default function ConciergeNavigationPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [documents, setDocuments] = useState<any[]>([])
   const [events, setEvents] = useState<any[]>([])
+  const [checklist, setChecklist] = useState<any[]>([])
+  const [escalations, setEscalations] = useState<any[]>([])
+  const [intakes, setIntakes] = useState<any[]>([])
   const [draft, setDraft] = useState<any>({})
   const [saving, setSaving] = useState(false)
   const [creatingDoc, setCreatingDoc] = useState<string | null>(null)
@@ -154,6 +157,7 @@ export default function ConciergeNavigationPage() {
       setPlaybooks(playbookRes.data || [])
       setMemberships(membershipRes.data || [])
       await loadCases()
+      await loadIntakes()
     } catch (error) {
       console.error('Navigation cockpit bootstrap failed:', error)
     } finally {
@@ -193,16 +197,100 @@ export default function ConciergeNavigationPage() {
       amount_reimbursed: item.amount_reimbursed ?? '',
       outcome: item.outcome || '',
     } : {})
+    const activeGuide = item ? guideForCase(item, guides) : null
+    if (item && activeGuide) await ensureChecklist(item, activeGuide)
     await loadDetail(id)
   }
 
+  async function ensureChecklist(item: any, guide: any) {
+    const { data: existing } = await supabase
+      .from('concierge_case_checklist_items')
+      .select('item_key')
+      .eq('case_id', item.id)
+
+    const existingKeys = new Set((existing || []).map((row: any) => row.item_key))
+    const rows: any[] = []
+
+    ;(guide.staff_checklist || []).forEach((label: string, index: number) => {
+      const itemKey = `action_${String(index + 1).padStart(2, '0')}`
+      if (!existingKeys.has(itemKey)) rows.push({
+        case_id: item.id,
+        patient_id: item.patient_id,
+        item_key: itemKey,
+        category: 'action',
+        label,
+        required: true,
+        metadata: { guide_code: guide.guide_code },
+      })
+    })
+
+    ;(guide.required_documents || []).forEach((label: string, index: number) => {
+      const itemKey = `document_${String(index + 1).padStart(2, '0')}`
+      if (!existingKeys.has(itemKey)) rows.push({
+        case_id: item.id,
+        patient_id: item.patient_id,
+        item_key: itemKey,
+        category: 'document',
+        label,
+        required: true,
+        metadata: { guide_code: guide.guide_code },
+      })
+    })
+
+    if (guide.legal_boundary && !existingKeys.has('boundary_01')) {
+      rows.push({
+        case_id: item.id,
+        patient_id: item.patient_id,
+        item_key: 'boundary_01',
+        category: 'boundary',
+        label: guide.legal_boundary,
+        required: true,
+        metadata: { guide_code: guide.guide_code },
+      })
+    }
+
+    if (rows.length) {
+      await supabase.from('concierge_case_checklist_items').insert(rows)
+    }
+  }
+
+  async function toggleChecklist(item: any) {
+    if (!user) return
+    const nextStatus = item.status === 'done' ? 'pending' : 'done'
+    const { error } = await supabase
+      .from('concierge_case_checklist_items')
+      .update({
+        status: nextStatus,
+        completed_by: nextStatus === 'done' ? user.id : null,
+        completed_at: nextStatus === 'done' ? new Date().toISOString() : null,
+      })
+      .eq('id', item.id)
+
+    if (error) return toast.error('Não foi possível atualizar o checklist.')
+    if (selectedId) await loadDetail(selectedId)
+  }
+
+  async function loadIntakes() {
+    const { data } = await supabase
+      .from('concierge_document_intake')
+      .select('*')
+      .in('status', ['received','needs_review','classified'])
+      .order('created_at', { ascending: false })
+      .limit(100)
+    setIntakes(data || [])
+  }
+
   async function loadDetail(id: string) {
-    const [docRes, eventRes] = await Promise.all([
+    const [docRes, eventRes, checklistRes, escalationRes] = await Promise.all([
       supabase.from('concierge_case_documents').select('*').eq('case_id', id).order('created_at', { ascending: false }),
       supabase.from('concierge_case_events').select('*').eq('case_id', id).order('created_at', { ascending: true }),
+      supabase.from('concierge_case_checklist_items').select('*').eq('case_id', id).order('created_at', { ascending: true }),
+      supabase.from('concierge_case_escalations').select('*').eq('case_id', id).order('created_at', { ascending: false }),
     ])
     setDocuments(docRes.data || [])
     setEvents(eventRes.data || [])
+    setChecklist(checklistRes.data || [])
+    setEscalations(escalationRes.data || [])
   }
 
   async function takeCase(item: any) {

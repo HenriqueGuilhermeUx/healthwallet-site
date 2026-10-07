@@ -255,39 +255,35 @@ export default function ConciergeLiveConversationsPage() {
         await takeSession(session.id)
       }
 
-      const actorRole = staff.role === 'care_coordinator'
-        ? 'care_coordinator'
-        : staff.role === 'nurse'
-          ? 'nurse'
-          : staff.role === 'doctor'
-            ? 'doctor'
-            : staff.role === 'admin'
-              ? 'admin'
-              : 'concierge'
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) throw new Error('Sessão expirada.')
 
-      const { error } = await supabase.from('concierge_chat_messages').insert({
-        session_id: session.id,
-        patient_id: session.patient_id,
-        actor_user_id: user.id,
-        actor_role: actorRole,
-        source: 'text',
-        visibility: 'patient',
-        content: body,
-        metadata: { source: 'mydatamed_live_console' },
+      const response = await fetch('/api/concierge/chat/reply', {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          sessionId: session.id,
+          content: body,
+        }),
       })
-      if (error) throw error
 
-      await supabase
-        .from('concierge_chat_sessions')
-        .update({ last_activity_at: new Date().toISOString() })
-        .eq('id', session.id)
+      const result = await response.json()
+      if (!response.ok) throw new Error(result?.error || 'Não foi possível enviar a mensagem.')
 
       setReply('')
       await loadMessages(session.id)
       await loadQueue()
-    } catch (error) {
+
+      if (session.channel === 'whatsapp' && result.delivered) {
+        toast.success('Mensagem enviada pelo WhatsApp.')
+      }
+    } catch (error: any) {
       console.error('Human reply failed:', error)
-      toast.error('Não foi possível enviar a mensagem.')
+      toast.error(error?.message || 'Não foi possível enviar a mensagem.')
     } finally {
       setSending(false)
     }

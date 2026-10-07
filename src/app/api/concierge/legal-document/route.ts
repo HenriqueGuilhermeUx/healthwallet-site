@@ -242,7 +242,7 @@ export async function POST(request: NextRequest) {
     const signatureRequest = result.request || {}
     const party = signatureRequest.parties?.[0] || {}
 
-    await adminClient.from('concierge_case_documents').upsert({
+    const legalDocumentRow = {
       case_id: caseId,
       patient_id: caseRow.patient_id,
       document_type: documentType,
@@ -258,28 +258,20 @@ export async function POST(request: NextRequest) {
         required_evidence: 'verified_evidence',
         template_version: 'v1',
       },
-    }, {
-      onConflict: 'case_id,document_type',
-      ignoreDuplicates: false,
-    }).catch(async () => {
-      await adminClient.from('concierge_case_documents').insert({
-        case_id: caseId,
-        patient_id: caseRow.patient_id,
-        document_type: documentType,
-        label: template.title,
-        status: signatureRequest.status === 'completed' ? 'signed' : 'signature_pending',
-        docwallet_signature_request_id: signatureRequest.id || null,
-        content_hash: signatureRequest.contentHash || null,
-        final_hash: signatureRequest.finalHash || null,
-        uploaded_by: user.id,
-        signed_at: signatureRequest.completedAt || null,
-        metadata: {
-          provider: 'docwallet',
-          required_evidence: 'verified_evidence',
-          template_version: 'v1',
-        },
-      })
-    })
+    }
+
+    const { data: existingLegalDoc } = await adminClient
+      .from('concierge_case_documents')
+      .select('id')
+      .eq('case_id', caseId)
+      .eq('document_type', documentType)
+      .maybeSingle()
+
+    const legalDocResult = existingLegalDoc?.id
+      ? await adminClient.from('concierge_case_documents').update(legalDocumentRow).eq('id', existingLegalDoc.id)
+      : await adminClient.from('concierge_case_documents').insert(legalDocumentRow)
+
+    if (legalDocResult.error) throw legalDocResult.error
 
     await adminClient.from('concierge_case_events').insert({
       case_id: caseId,

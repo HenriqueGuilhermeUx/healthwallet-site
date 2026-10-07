@@ -63,6 +63,8 @@ export default function ExternalCoordinationPage() {
   const [tasks, setTasks] = useState<any[]>([])
   const [saving, setSaving] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
+  const [linkedRequestId, setLinkedRequestId] = useState('')
+  const [linkedActionId, setLinkedActionId] = useState('')
   const [form, setForm] = useState({
     patientId: '',
     patientName: '',
@@ -83,6 +85,10 @@ export default function ExternalCoordinationPage() {
     const params = new URLSearchParams(window.location.search)
     const patientId = params.get('patient') || ''
     const patientName = params.get('name') || ''
+    const requestId = params.get('request') || ''
+    const actionId = params.get('action') || ''
+    setLinkedRequestId(requestId)
+    setLinkedActionId(actionId)
     if (patientId || patientName) {
       setForm((current) => ({
         ...current,
@@ -130,6 +136,8 @@ export default function ExternalCoordinationPage() {
         .insert({
           patient_id: form.patientId.trim(),
           patient_name: form.patientName.trim() || null,
+          request_id: linkedRequestId || null,
+          action_id: linkedActionId || null,
           requested_by: user.id,
           task_type: form.taskType,
           title: form.title.trim(),
@@ -139,7 +147,11 @@ export default function ExternalCoordinationPage() {
           state: form.state.trim().toUpperCase() || null,
           insurance_name: form.insuranceName.trim() || null,
           status: 'new',
-          metadata: { source: 'mydatamed_external_coordination' },
+          metadata: {
+            source: 'mydatamed_external_coordination',
+            linked_request_id: linkedRequestId || null,
+            linked_action_id: linkedActionId || null,
+          },
         })
         .select('*')
         .single()
@@ -252,6 +264,11 @@ export default function ExternalCoordinationPage() {
         <div className="rounded-3xl border border-gray-100 bg-white p-6 shadow-sm">
           <h2 className="text-lg font-bold text-gray-900">Abrir nova coordenação</h2>
           <p className="mt-1 text-sm text-gray-500">Pode nascer de um caso clínico, plano de ação ou pedido direto do paciente.</p>
+          {(linkedRequestId || linkedActionId) && (
+            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+              Origem vinculada automaticamente {linkedRequestId ? 'ao caso clínico' : 'ao plano de ação'}.
+            </div>
+          )}
 
           <div className="mt-5 grid gap-3">
             <Input label="Patient ID HealthWallet" value={form.patientId} onChange={(value: string) => setForm({ ...form, patientId: value })} />

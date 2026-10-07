@@ -73,7 +73,7 @@ function visibleForRole(item: any, role: string, userId?: string) {
 }
 
 export default function ConciergeProfessionalPage() {
-  const { user, professional, loading: authLoading } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const router = useRouter()
   const [loading, setLoading] = useState(true)
   const [staff, setStaff] = useState<any>(null)
@@ -202,7 +202,7 @@ export default function ConciergeProfessionalPage() {
     return <div className="min-h-[65vh] flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-emerald-600" /></div>
   }
 
-  if (!user || !professional) return null
+  if (!user) return null
 
   if (!staff?.active) {
     return (

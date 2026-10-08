@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+
 const allowedRoles = new Set(['master','admin','care_coordinator','concierge_agent','nurse','doctor'])
 
 function getClients() {
@@ -171,6 +174,15 @@ export async function POST(request: NextRequest) {
       .single()
     if (caseError || !caseRow) return NextResponse.json({ error: 'Caso não encontrado.' }, { status: 404 })
 
+    if (action === 'probe') {
+      return NextResponse.json({
+        ok: true,
+        stage: 'case_ready',
+        caseId: caseRow.id,
+        patientId: caseRow.patient_id,
+      })
+    }
+
     const { data: membership } = await adminClient
       .from('concierge_memberships')
       .select('patient_id,metadata')
@@ -206,10 +218,22 @@ export async function POST(request: NextRequest) {
       }
 
       const { baseUrl, key } = docwalletConfig()
-      const statusResponse = await fetch(
-        `${baseUrl}/api/internal/mydatamed/concierge/signatures/${encodeURIComponent(authorization.docwallet_signature_request_id)}`,
-        { headers: { 'X-MyDataMed-Key': key } },
-      )
+      const syncController = new AbortController()
+      const syncTimeout = setTimeout(() => syncController.abort(), 12000)
+
+      let statusResponse: Response
+      try {
+        statusResponse = await fetch(
+          `${baseUrl}/api/internal/mydatamed/concierge/signatures/${encodeURIComponent(authorization.docwallet_signature_request_id)}`,
+          {
+            signal: syncController.signal,
+            headers: { 'X-MyDataMed-Key': key },
+          },
+        )
+      } finally {
+        clearTimeout(syncTimeout)
+      }
+
       const statusResult = await statusResponse.json().catch(() => ({}))
 
       if (!statusResponse.ok || statusResult?.success === false) {
@@ -287,24 +311,33 @@ export async function POST(request: NextRequest) {
     const { baseUrl, key } = docwalletConfig()
     const idempotencyKey = `mydatamed:${caseId}:${documentType}:v1`
 
-    const response = await fetch(`${baseUrl}/api/internal/mydatamed/concierge/signatures`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-MyDataMed-Key': key,
-        'X-Idempotency-Key': idempotencyKey,
-      },
-      body: JSON.stringify({
-        documentType,
-        externalReference: caseId,
-        title: template.title,
-        content: template.content,
-        signer: {
-          name: signerName,
-          email: signerEmail,
+    const createController = new AbortController()
+    const createTimeout = setTimeout(() => createController.abort(), 12000)
+
+    let response: Response
+    try {
+      response = await fetch(`${baseUrl}/api/internal/mydatamed/concierge/signatures`, {
+        method: 'POST',
+        signal: createController.signal,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-MyDataMed-Key': key,
+          'X-Idempotency-Key': idempotencyKey,
         },
-      }),
-    })
+        body: JSON.stringify({
+          documentType,
+          externalReference: caseId,
+          title: template.title,
+          content: template.content,
+          signer: {
+            name: signerName,
+            email: signerEmail,
+          },
+        }),
+      })
+    } finally {
+      clearTimeout(createTimeout)
+    }
 
     const result = await response.json().catch(() => ({}))
     if (!response.ok || result?.success === false) {
@@ -431,6 +464,12 @@ export async function POST(request: NextRequest) {
     if (message === 'UNAUTHORIZED') return NextResponse.json({ error: 'Sessão inválida.' }, { status: 401 })
     if (message === 'FORBIDDEN') return NextResponse.json({ error: 'Acesso restrito à equipe Concierge.' }, { status: 403 })
     if (message === 'DOCWALLET_NOT_CONFIGURED') return NextResponse.json({ error: 'Integração DocWallet ainda não configurada neste ambiente.' }, { status: 503 })
+    if (error?.name === 'AbortError') {
+      return NextResponse.json(
+        { error: 'O DocWallet demorou para responder. O ambiente de homologação pode estar iniciando; tente novamente em alguns segundos.', stage: 'docwallet_timeout' },
+        { status: 504 },
+      )
+    }
     console.error('Concierge legal document API error:', error)
     return NextResponse.json({ error: 'Não foi possível gerar o documento.' }, { status: 500 })
   }

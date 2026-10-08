@@ -131,7 +131,7 @@ export function Header() {
             )}
 
             {canUseExternalCoordination && (
-              <NavLink href="/concierge/profissional/navegacao" icon={ShieldCheck} label="Planos" tone="sky" />
+              <NavLink href="/concierge/profissional/navegacao" icon={ShieldCheck} label="Casos" tone="sky" />
             )}
 
             {canUseExternalCoordination && (

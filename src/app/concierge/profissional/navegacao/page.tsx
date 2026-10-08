@@ -370,9 +370,78 @@ export default function ConciergeNavigationPage() {
     toast.message('Estimativa calculada sem feriados. Confirme o prazo antes de marcar como validado.')
   }
 
-  async function generateLegalDocument(type: 'privacy_consent'|'representation_authorization'|'combined_onboarding') {
+  async function generateCaseAuthorization() {
+    if (!selectedId || !selected) return
+    setCreatingDoc('representation_authorization')
+
+    try {
+      const scope = {
+        case_id: selected.id,
+        case_type: selected.case_type,
+        insurer_name: draft.insurer_name || selected.insurer_name || null,
+        actions: [
+          'request_information',
+          'follow_protocol',
+          'submit_case_documents',
+          'request_reanalysis',
+          'administrative_complaint_when_allowed',
+        ],
+        excludes: [
+          'financial_transactions',
+          'plan_changes',
+          'rights_waiver',
+          'password_sharing',
+          'medical_decisions',
+          'judicial_representation',
+        ],
+      }
+
+      const { error: prepareError } = await supabase.rpc('concierge_prepare_case_authorization', {
+        p_case_id: selectedId,
+        p_purpose: `Representação administrativa limitada ao caso: ${selected.title}`,
+        p_recipient: draft.insurer_name || selected.insurer_name || null,
+        p_scope: scope,
+      })
+      if (prepareError) throw prepareError
+
+      const { data: sessionData } = await supabase.auth.getSession()
+      const token = sessionData.session?.access_token
+      if (!token) throw new Error('Sessão expirada.')
+
+      const response = await fetch('/api/concierge/legal-document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          caseId: selectedId,
+          documentType: 'representation_authorization',
+          action: 'create',
+        }),
+      })
+
+      const result = await response.json()
+      if (!response.ok) throw new Error(result?.error || 'Falha ao gerar autorização.')
+
+      if (result.signUrl) {
+        await navigator.clipboard.writeText(result.signUrl).catch(() => undefined)
+        toast.success('Autorização específica criada. Link de assinatura copiado.')
+        window.open(result.signUrl, '_blank', 'noopener,noreferrer')
+      } else {
+        toast.success('Autorização específica criada no DocWallet.')
+      }
+
+      await loadCases()
+      await loadDetail(selectedId)
+    } catch (error: any) {
+      toast.error(error?.message || 'Não foi possível preparar a autorização deste caso.')
+    } finally {
+      setCreatingDoc(null)
+    }
+  }
+
+  async function syncCaseAuthorization() {
     if (!selectedId) return
-    setCreatingDoc(type)
+    setCreatingDoc('representation_authorization_sync')
+
     try {
       const { data: sessionData } = await supabase.auth.getSession()
       const token = sessionData.session?.access_token
@@ -381,21 +450,26 @@ export default function ConciergeNavigationPage() {
       const response = await fetch('/api/concierge/legal-document', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ caseId: selectedId, documentType: type }),
+        body: JSON.stringify({
+          caseId: selectedId,
+          documentType: 'representation_authorization',
+          action: 'sync',
+        }),
       })
-      const result = await response.json()
-      if (!response.ok) throw new Error(result?.error || 'Falha ao gerar documento.')
 
-      if (result.signUrl) {
-        await navigator.clipboard.writeText(result.signUrl).catch(() => undefined)
-        toast.success('Documento criado. Link de assinatura copiado.')
-        window.open(result.signUrl, '_blank', 'noopener,noreferrer')
+      const result = await response.json()
+      if (!response.ok) throw new Error(result?.error || 'Falha ao consultar assinatura.')
+
+      if (result.signed) {
+        toast.success('Assinatura confirmada. Representação liberada para este caso.')
       } else {
-        toast.success('Documento criado no DocWallet.')
+        toast.message('A assinatura ainda está pendente no DocWallet.')
       }
+
+      await loadCases()
       await loadDetail(selectedId)
     } catch (error: any) {
-      toast.error(error?.message || 'Não foi possível gerar o documento.')
+      toast.error(error?.message || 'Não foi possível atualizar a assinatura.')
     } finally {
       setCreatingDoc(null)
     }
@@ -943,17 +1017,39 @@ export default function ConciergeNavigationPage() {
 
               <section className="rounded-2xl border bg-slate-50 p-4">
                 <div className="flex items-center gap-2"><FileSignature className="h-5 w-5 text-indigo-700" /><h3 className="font-bold">Documentos e representação</h3></div>
-                <p className="mt-1 text-xs text-gray-500">DocWallet gera assinatura eletrônica com OTP obrigatório para estes documentos.</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  O Concierge continua ativo sem autorização ampla. Gere somente quando este caso exigir atuação formal em nome do paciente.
+                </p>
                 <div className="mt-3 flex flex-wrap gap-2">
-                  <DocButton label="Autorização / procuração" busy={creatingDoc === 'representation_authorization'} onClick={() => void generateLegalDocument('representation_authorization')} />
-                  <DocButton label="Consentimento LGPD" busy={creatingDoc === 'privacy_consent'} onClick={() => void generateLegalDocument('privacy_consent')} />
-                  <DocButton label="Termo integrado" busy={creatingDoc === 'combined_onboarding'} onClick={() => void generateLegalDocument('combined_onboarding')} />
+                  <DocButton
+                    label="Preparar autorização deste caso"
+                    busy={creatingDoc === 'representation_authorization'}
+                    onClick={() => void generateCaseAuthorization()}
+                  />
+                  {documents.some((doc) =>
+                    doc.document_type === 'representation_authorization'
+                    && doc.status === 'signature_pending'
+                  ) && (
+                    <DocButton
+                      label="Atualizar assinatura"
+                      busy={creatingDoc === 'representation_authorization_sync'}
+                      onClick={() => void syncCaseAuthorization()}
+                    />
+                  )}
                 </div>
                 <div className="mt-4 space-y-2">
                   {documents.map((doc) => (
                     <div key={doc.id} className="flex items-center justify-between rounded-xl border bg-white p-3 text-xs">
-                      <div><p className="font-bold">{doc.label}</p><p className="mt-1 text-gray-500">{doc.status} · {fmt(doc.created_at)}</p></div>
-                      {doc.status === 'signed' ? <BadgeCheck className="h-5 w-5 text-emerald-600" /> : <Clock3 className="h-5 w-5 text-amber-600" />}
+                      <div>
+                        <p className="font-bold">{doc.label}</p>
+                        <p className="mt-1 text-gray-500">{doc.status} · {fmt(doc.created_at)}</p>
+                        {doc.document_type === 'representation_authorization' && (
+                          <p className="mt-1 text-[11px] font-semibold text-indigo-700">Válida somente para este caso.</p>
+                        )}
+                      </div>
+                      {doc.status === 'signed'
+                        ? <BadgeCheck className="h-5 w-5 text-emerald-600" />
+                        : <Clock3 className="h-5 w-5 text-amber-600" />}
                     </div>
                   ))}
                 </div>

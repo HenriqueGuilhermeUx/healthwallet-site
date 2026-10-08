@@ -13,25 +13,59 @@ function LoginContent() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
 
-  const redirectTo = searchParams.get('redirect') || '/dashboard'
+  const explicitRedirect = searchParams.get('redirect')
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
 
-    setLoading(false)
-
     if (error) {
+      setLoading(false)
       toast.error('Erro ao entrar')
       return
     }
 
-    router.push(redirectTo)
+    if (explicitRedirect) {
+      setLoading(false)
+      router.push(explicitRedirect)
+      return
+    }
+
+    const userId = data.user?.id
+    if (userId) {
+      const [{ data: concierge }, { data: team }] = await Promise.all([
+        supabase
+          .from('concierge_staff')
+          .select('role,active')
+          .eq('user_id', userId)
+          .maybeSingle(),
+        supabase
+          .from('mydatamed_team_members')
+          .select('role,active')
+          .eq('user_id', userId)
+          .maybeSingle(),
+      ])
+
+      const teamRole = concierge?.active
+        ? concierge.role
+        : team?.active
+          ? team.role
+          : null
+
+      if (teamRole && ['master','admin','care_coordinator','concierge_agent','nurse','doctor'].includes(teamRole)) {
+        setLoading(false)
+        router.push('/concierge/profissional/navegacao')
+        return
+      }
+    }
+
+    setLoading(false)
+    router.push('/dashboard')
   }
 
   return (

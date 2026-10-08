@@ -37,10 +37,12 @@ const statusLabels: Record<string, string> = {
 }
 
 const roleLabels: Record<string, string> = {
+  master: 'Master',
+  admin: 'Administração',
+  care_coordinator: 'Coordenação',
+  concierge_agent: 'Concierge',
   nurse: 'Enfermagem',
   doctor: 'Médico',
-  care_coordinator: 'Coordenação',
-  admin: 'Administração',
   specialist: 'Especialista',
 }
 
@@ -90,8 +92,28 @@ export default function ConciergePatientCommandCenter() {
     if (!user || !patientId) return
     setLoading(true)
     try {
-      const { data: self, error: selfError } = await supabase.from('concierge_staff').select('*').eq('user_id', user.id).maybeSingle()
-      if (selfError) throw selfError
+      const [{ data: conciergeSelf, error: conciergeError }, { data: teamSelf, error: teamError }] = await Promise.all([
+        supabase
+          .from('concierge_staff')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+        supabase
+          .from('mydatamed_team_members')
+          .select('user_id,role,display_name,active')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+      ])
+
+      if (conciergeError) throw conciergeError
+      if (teamError) throw teamError
+
+      const self = conciergeSelf?.active
+        ? conciergeSelf
+        : teamSelf?.active && ['master','admin','care_coordinator','concierge_agent','nurse','doctor'].includes(teamSelf.role)
+          ? { ...teamSelf, active: true }
+          : null
+
       setStaff(self)
       if (!self?.active) return
 

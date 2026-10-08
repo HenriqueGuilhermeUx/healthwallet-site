@@ -7,3 +7,7 @@
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+
+
+[context.deploy-preview.environment]
+  HEALTHWALLET_CONCIERGE_API_URL = "https://deploy-preview-8--healthwallet1.netlify.app"

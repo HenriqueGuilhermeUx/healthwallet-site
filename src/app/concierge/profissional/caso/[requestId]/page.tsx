@@ -40,10 +40,12 @@ const statusLabels: Record<string, string> = {
 }
 
 const roleLabels: Record<string, string> = {
+  master: 'Master',
+  admin: 'Administração',
+  care_coordinator: 'Coordenação',
+  concierge_agent: 'Concierge',
   nurse: 'Enfermagem',
   doctor: 'Médico',
-  care_coordinator: 'Coordenação',
-  admin: 'Administração',
 }
 
 function formatDateTime(value?: string | null) {
@@ -92,12 +94,28 @@ export default function ConciergeProfessionalCasePage() {
     if (!user || !requestId) return
     setLoading(true)
     try {
-      const { data: self, error: selfError } = await supabase
-        .from('concierge_staff')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle()
-      if (selfError) throw selfError
+      const [{ data: conciergeSelf, error: conciergeError }, { data: teamSelf, error: teamError }] = await Promise.all([
+        supabase
+          .from('concierge_staff')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+        supabase
+          .from('mydatamed_team_members')
+          .select('user_id,role,display_name,active')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+      ])
+
+      if (conciergeError) throw conciergeError
+      if (teamError) throw teamError
+
+      const self = conciergeSelf?.active
+        ? conciergeSelf
+        : teamSelf?.active && ['master','admin','care_coordinator','concierge_agent','nurse','doctor'].includes(teamSelf.role)
+          ? { ...teamSelf, active: true }
+          : null
+
       setStaff(self)
       if (!self?.active) return
 
@@ -139,8 +157,8 @@ export default function ConciergeProfessionalCasePage() {
   }
 
   const canPublish = ['doctor', 'admin'].includes(staff?.role)
-  const canCoordinate = ['nurse', 'care_coordinator', 'admin'].includes(staff?.role)
-  const canOpenExternalCoordination = ['nurse', 'care_coordinator', 'admin', 'doctor'].includes(staff?.role)
+  const canCoordinate = ['master', 'nurse', 'care_coordinator', 'concierge_agent', 'admin'].includes(staff?.role)
+  const canOpenExternalCoordination = ['master', 'nurse', 'care_coordinator', 'concierge_agent', 'admin', 'doctor'].includes(staff?.role)
   const patientName = request?.subject_name || request?.context_snapshot?.patient_name || `Paciente ${String(request?.patient_id || '').slice(0, 8)}`
   const contextMedications = Array.isArray(context?.active_medications) ? context.active_medications : []
   const contextExams = Array.isArray(context?.linked_exams) ? context.linked_exams : []

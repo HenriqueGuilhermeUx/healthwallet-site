@@ -11,6 +11,7 @@ import {
   Clock3,
   HeartPulse,
   Loader2,
+  MessageCircle,
   ShieldCheck,
   Stethoscope,
   Target,
@@ -21,10 +22,12 @@ import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 
 const roleLabels: Record<string, string> = {
+  master: 'Master',
+  admin: 'Administração',
+  care_coordinator: 'Coordenação',
+  concierge_agent: 'Concierge',
   nurse: 'Enfermagem',
   doctor: 'Médico',
-  care_coordinator: 'Coordenação',
-  admin: 'Administração',
 }
 
 const statusLabels: Record<string, string> = {
@@ -60,7 +63,7 @@ function priorityScore(item: any) {
 }
 
 function visibleForRole(item: any, role: string, userId?: string) {
-  if (role === 'admin' || role === 'care_coordinator') return true
+  if (['master', 'admin', 'care_coordinator', 'concierge_agent'].includes(role)) return true
   if (role === 'doctor') {
     return item.assigned_doctor_id === userId
       || (!item.assigned_doctor_id && ['escalated_medical', 'medical_review'].includes(item.status))
@@ -83,6 +86,7 @@ export default function ConciergeProfessionalPage() {
   const [alerts, setAlerts] = useState<any[]>([])
   const [events, setEvents] = useState<any[]>([])
   const [assignments, setAssignments] = useState<any[]>([])
+  const [chatSessions, setChatSessions] = useState<any[]>([])
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/login')
@@ -96,13 +100,28 @@ export default function ConciergeProfessionalPage() {
     if (!user) return
     setLoading(true)
     try {
-      const { data: self, error: selfError } = await supabase
-        .from('concierge_staff')
-        .select('*')
-        .eq('user_id', user.id)
-        .maybeSingle()
+      const [{ data: conciergeSelf, error: conciergeError }, { data: teamSelf, error: teamError }] = await Promise.all([
+        supabase
+          .from('concierge_staff')
+          .select('*')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+        supabase
+          .from('mydatamed_team_members')
+          .select('user_id,role,display_name,active')
+          .eq('user_id', user.id)
+          .maybeSingle(),
+      ])
 
-      if (selfError) throw selfError
+      if (conciergeError) throw conciergeError
+      if (teamError) throw teamError
+
+      const self = conciergeSelf?.active
+        ? conciergeSelf
+        : teamSelf?.active && ['master','admin','care_coordinator','concierge_agent','nurse','doctor'].includes(teamSelf.role)
+          ? { ...teamSelf, active: true }
+          : null
+
       setStaff(self)
 
       if (!self?.active) {
@@ -115,9 +134,12 @@ export default function ConciergeProfessionalPage() {
         return
       }
 
-      if (['admin', 'care_coordinator'].includes(self.role)) {
+      if (['master', 'admin', 'care_coordinator'].includes(self.role)) {
         try {
-          await supabase.rpc('concierge_refresh_time_alerts')
+          await Promise.allSettled([
+            supabase.rpc('concierge_refresh_time_alerts'),
+            supabase.rpc('concierge_refresh_operational_alerts'),
+          ])
         } catch {
           // Alert refresh must never block access to the professional workspace.
         }
@@ -145,6 +167,18 @@ export default function ConciergeProfessionalPage() {
       setAlerts(alertRes.data || [])
       setEvents(eventRes.data || [])
       setAssignments(assignmentRes.data || [])
+
+      try {
+        const { data: chats } = await supabase
+          .from('concierge_chat_sessions')
+          .select('id,patient_id,status,last_activity_at,attention_reason')
+          .neq('status', 'closed')
+          .order('last_activity_at', { ascending: false })
+          .limit(100)
+        setChatSessions(chats || [])
+      } catch {
+        setChatSessions([])
+      }
     } catch (error) {
       console.error('MyDataMed Concierge professional workspace unavailable:', error)
       setStaff(null)
@@ -183,7 +217,7 @@ export default function ConciergeProfessionalPage() {
   }), [memberships, requests, actions, alerts, events, assignments])
 
   const visiblePatients = useMemo(() => {
-    if (!staff || ['admin', 'care_coordinator'].includes(staff.role)) return patientRows
+    if (!staff || ['master', 'admin', 'care_coordinator', 'concierge_agent'].includes(staff.role)) return patientRows
     return patientRows.filter((row) =>
       row.nurse?.professional_id === user?.id
       || row.doctor?.professional_id === user?.id
@@ -196,6 +230,9 @@ export default function ConciergeProfessionalPage() {
     attention: roleRequests.filter((item) => item.urgency === 'priority').length + alerts.filter((item) => ['attention', 'high'].includes(item.severity)).length,
     medical: roleRequests.filter((item) => ['escalated_medical', 'medical_review'].includes(item.status)).length,
     patients: visiblePatients.length,
+    liveChats: chatSessions.filter((item) => Date.now() - new Date(item.last_activity_at).getTime() < 2 * 60 * 1000).length,
+    humanChats: chatSessions.filter((item) => item.status === 'human_requested').length,
+    attentionChats: chatSessions.filter((item) => item.status === 'attention').length,
   }
 
   if (authLoading || loading) {
@@ -209,8 +246,8 @@ export default function ConciergeProfessionalPage() {
       <main className="max-w-4xl mx-auto px-4 py-10">
         <section className="rounded-3xl border border-amber-200 bg-amber-50 p-7">
           <div className="flex gap-3"><ShieldCheck className="w-6 h-6 text-amber-700 shrink-0" /><div>
-            <h1 className="text-xl font-bold text-amber-950">Acesso ao Concierge Profissional ainda não habilitado</h1>
-            <p className="mt-2 text-sm text-amber-900/80">Seu login MyDataMed está ativo, mas este módulo exige vínculo em <code>concierge_staff</code>. Isso mantém o acesso ao acompanhamento longitudinal separado do restante do consultório e sujeito às autorizações do paciente.</p>
+            <h1 className="text-xl font-bold text-amber-950">Acesso ao Concierge Profissional não habilitado para esta conta</h1>
+            <p className="mt-2 text-sm text-amber-900/80">Este módulo é restrito à equipe MyDataMed/Concierge autorizada.</p>
           </div></div>
         </section>
       </main>
@@ -242,6 +279,38 @@ export default function ConciergeProfessionalPage() {
           </div>
         </div>
       </section>
+
+      <Link href="/concierge/profissional/navegacao" className="block rounded-3xl border border-emerald-200 bg-emerald-50 p-5 transition hover:border-emerald-300">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-start gap-3">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700"><ShieldCheck className="h-5 w-5" /></div>
+            <div>
+              <p className="font-bold text-emerald-950">Casos operacionais do Concierge</p>
+              <p className="mt-1 text-sm text-emerald-900/75">Autorizações, negativas, reembolsos, protocolos, documentos e próximos passos acompanhados pela equipe.</p>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-2 rounded-xl bg-emerald-700 px-4 py-2 text-sm font-bold text-white">Abrir casos <ArrowRight className="h-4 w-4" /></span>
+        </div>
+      </Link>
+
+      {chatSessions.length > 0 && (
+        <Link href="/concierge/profissional/conversas" className="block rounded-3xl border border-violet-200 bg-violet-50 p-5 transition hover:border-violet-300">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-100 text-violet-700"><MessageCircle className="h-5 w-5" /></div>
+              <div>
+                <p className="font-bold text-violet-950">Conversas Concierge acontecendo agora</p>
+                <p className="mt-1 text-sm text-violet-900/75">A IA atende primeiro, mas sua equipe pode acompanhar e entrar proativamente quando necessário.</p>
+              </div>
+            </div>
+            <div className="flex gap-2 text-xs font-bold">
+              {stats.liveChats > 0 && <span className="rounded-full bg-emerald-100 px-3 py-1.5 text-emerald-800">{stats.liveChats} ao vivo</span>}
+              {stats.humanChats > 0 && <span className="rounded-full bg-blue-100 px-3 py-1.5 text-blue-800">{stats.humanChats} pediram humano</span>}
+              {stats.attentionChats > 0 && <span className="rounded-full bg-amber-100 px-3 py-1.5 text-amber-800">{stats.attentionChats} atenção</span>}
+            </div>
+          </div>
+        </Link>
+      )}
 
       <section className="grid gap-4 md:grid-cols-4">
         <SignalCard icon={AlertTriangle} title="Agora" value={stats.actionNow} text="Redirecionamentos e situações que não podem ficar escondidos na lista." tone="red" />

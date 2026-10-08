@@ -18,11 +18,13 @@ import {
   HeartPulse,
   Image,
   LogOut,
+  MessageCircle,
   MonitorSmartphone,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
   User,
+  Users,
   UserCog,
   WalletCards,
   Watch,
@@ -76,6 +78,7 @@ export function Header() {
   const canShowRegulated = professional?.professional_type === 'medico'
   const canUseClinicalConcierge = !!teamRole && ['master', 'admin', 'care_coordinator', 'nurse', 'doctor'].includes(teamRole)
   const canUseExternalCoordination = !!teamRole && ['master', 'admin', 'care_coordinator', 'concierge_agent', 'nurse', 'doctor'].includes(teamRole)
+  const canUseLiveConversations = canUseExternalCoordination
   const isMaster = teamRole === 'master'
 
   return (
@@ -117,6 +120,18 @@ export function Header() {
 
             {canUseClinicalConcierge && (
               <NavLink href="/concierge/profissional" icon={HeartPulse} label="Concierge" tone="emerald" />
+            )}
+
+            {canUseLiveConversations && (
+              <NavLink href="/concierge/profissional/conversas" icon={MessageCircle} label="Conversas" tone="violet" />
+            )}
+
+            {canUseExternalCoordination && (
+              <NavLink href="/concierge/profissional/assinantes" icon={Users} label="Assinantes" tone="emerald" />
+            )}
+
+            {canUseExternalCoordination && (
+              <NavLink href="/concierge/profissional/navegacao" icon={ShieldCheck} label="Casos" tone="sky" />
             )}
 
             {canUseExternalCoordination && (

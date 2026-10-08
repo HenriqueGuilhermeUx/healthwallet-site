@@ -384,6 +384,8 @@ export async function POST(request: NextRequest) {
         template_version: 'case_v1',
         case_scoped: true,
         source: 'mydatamed_navigation_cockpit',
+        patient_sign_url: party.signUrl || null,
+        patient_sign_url_created_at: party.signUrl ? new Date().toISOString() : null,
       },
     }
 
@@ -420,7 +422,9 @@ export async function POST(request: NextRequest) {
       metadata: {
         provider: 'docwallet',
         required_evidence: 'verified_evidence',
-        template_version: 'v1',
+        template_version: 'case_v1',
+        case_scoped: true,
+        patient_sign_url: party.signUrl || null,
       },
     }
 

@@ -370,6 +370,32 @@ export default function ConciergeNavigationPage() {
     toast.message('Estimativa calculada sem feriados. Confirme o prazo antes de marcar como validado.')
   }
 
+  async function readLegalApiResponse(response: Response) {
+    const raw = await response.text()
+    let payload: any = {}
+
+    if (raw.trim()) {
+      try {
+        payload = JSON.parse(raw)
+      } catch {
+        const looksHtml = /^\s*</.test(raw)
+        const kind = looksHtml ? 'html_response' : 'non_json_response'
+        throw new Error(
+          `Serviço de autorização indisponível agora. [legal_api:http_${response.status}:${kind}]`,
+        )
+      }
+    }
+
+    if (!response.ok) {
+      const stage = payload?.stage ? `:${payload.stage}` : ''
+      throw new Error(
+        `${payload?.error || 'Não foi possível processar a autorização.'} [legal_api:http_${response.status}${stage}]`,
+      )
+    }
+
+    return payload
+  }
+
   async function generateCaseAuthorization() {
     if (!selectedId || !selected) return
     setCreatingDoc('representation_authorization')
@@ -408,6 +434,17 @@ export default function ConciergeNavigationPage() {
       const token = sessionData.session?.access_token
       if (!token) throw new Error('Sessão expirada.')
 
+      const probeResponse = await fetch('/api/concierge/legal-document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({
+          caseId: selectedId,
+          documentType: 'representation_authorization',
+          action: 'probe',
+        }),
+      })
+      await readLegalApiResponse(probeResponse)
+
       const response = await fetch('/api/concierge/legal-document', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
@@ -418,8 +455,7 @@ export default function ConciergeNavigationPage() {
         }),
       })
 
-      const result = await response.json()
-      if (!response.ok) throw new Error(result?.error || 'Falha ao gerar autorização.')
+      const result = await readLegalApiResponse(response)
 
       if (result.signUrl) {
         await navigator.clipboard.writeText(result.signUrl).catch(() => undefined)
@@ -457,8 +493,7 @@ export default function ConciergeNavigationPage() {
         }),
       })
 
-      const result = await response.json()
-      if (!response.ok) throw new Error(result?.error || 'Falha ao consultar assinatura.')
+      const result = await readLegalApiResponse(response)
 
       if (result.signed) {
         toast.success('Assinatura confirmada. Representação liberada para este caso.')

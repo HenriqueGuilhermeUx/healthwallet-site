@@ -24,6 +24,7 @@ import {
   SlidersHorizontal,
   Sparkles,
   User,
+  Users,
   UserCog,
   WalletCards,
   Watch,

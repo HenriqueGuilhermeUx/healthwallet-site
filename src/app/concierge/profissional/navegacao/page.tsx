@@ -396,6 +396,37 @@ export default function ConciergeNavigationPage() {
     return payload
   }
 
+
+  async function postLegalDocumentWithRetry(
+    token: string,
+    payload: Record<string, any>,
+    attempts = 3,
+  ) {
+    let lastResponse: Response | null = null
+
+    for (let attempt = 1; attempt <= attempts; attempt += 1) {
+      const response = await fetch('/api/concierge/legal-document', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(payload),
+      })
+
+      lastResponse = response
+
+      if (response.status !== 504 || attempt === attempts) {
+        return response
+      }
+
+      if (attempt === 1) {
+        toast.message('DocWallet está iniciando. Tentando novamente automaticamente…')
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 5000))
+    }
+
+    return lastResponse as Response
+  }
+
   async function generateCaseAuthorization() {
     if (!selectedId || !selected) return
     setCreatingDoc('representation_authorization')
@@ -445,14 +476,10 @@ export default function ConciergeNavigationPage() {
       })
       await readLegalApiResponse(probeResponse)
 
-      const response = await fetch('/api/concierge/legal-document', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          caseId: selectedId,
-          documentType: 'representation_authorization',
-          action: 'create',
-        }),
+      const response = await postLegalDocumentWithRetry(token, {
+        caseId: selectedId,
+        documentType: 'representation_authorization',
+        action: 'create',
       })
 
       const result = await readLegalApiResponse(response)
@@ -483,14 +510,10 @@ export default function ConciergeNavigationPage() {
       const token = sessionData.session?.access_token
       if (!token) throw new Error('Sessão expirada.')
 
-      const response = await fetch('/api/concierge/legal-document', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-        body: JSON.stringify({
-          caseId: selectedId,
-          documentType: 'representation_authorization',
-          action: 'sync',
-        }),
+      const response = await postLegalDocumentWithRetry(token, {
+        caseId: selectedId,
+        documentType: 'representation_authorization',
+        action: 'sync',
       })
 
       const result = await readLegalApiResponse(response)

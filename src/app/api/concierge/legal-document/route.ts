@@ -90,34 +90,35 @@ Ao assinar eletronicamente, o titular declara que leu e compreendeu este documen
 
   if (params.type === 'representation_authorization') {
     return {
-      title: 'Autorização de Representação Administrativa em Saúde — MyDataMed Concierge',
-      content: `AUTORIZAÇÃO DE REPRESENTAÇÃO ADMINISTRATIVA EM SAÚDE
+      title: 'Autorização Específica de Representação Administrativa — MyDataMed Concierge',
+      content: `AUTORIZAÇÃO ESPECÍFICA DE REPRESENTAÇÃO ADMINISTRATIVA EM SAÚDE
 
 Data: ${today}
 Outorgante/signatário: ${params.signerName}
 E-mail: ${params.signerEmail}
 Caso Concierge: ${params.caseTitle}
-Operadora: ${params.insurerName || 'a informar'}
+Operadora/destinatário principal: ${params.insurerName || 'a informar'}
 
-O outorgante autoriza a MyDataMed e sua equipe Concierge, por seus representantes designados, a praticar atos administrativos necessários à coordenação de sua jornada de saúde, inclusive:
+Esta autorização é EXCLUSIVA para o caso Concierge acima identificado. Ela não concede representação geral, permanente ou para outros casos.
 
-1. solicitar informações, orientações, status de atendimento e números de protocolo;
-2. protocolar e acompanhar pedidos de autorização, agendamento, reembolso e revisão administrativa;
-3. encaminhar documentos fornecidos pelo titular e receber respostas relacionadas ao caso;
+O outorgante autoriza a MyDataMed e sua equipe Concierge, por representantes designados, somente na medida necessária para este caso, a:
+
+1. solicitar informações, status, justificativas e números de protocolo;
+2. protocolar e acompanhar pedido de autorização, reanálise ou recurso administrativo relacionado a este caso;
+3. encaminhar documentos fornecidos pelo titular e receber respostas relacionadas a este caso;
 4. contatar operadora, prestadores, central de atendimento e Ouvidoria;
-5. registrar reclamação administrativa perante órgãos de defesa do consumidor ou regulatórios quando o canal admitir representação por terceiro e quando houver autorização específica suficiente;
-6. acompanhar prazos e solicitar reanálise de negativas administrativas;
-7. obter documentos de negativa, memória de cálculo de reembolso e registros de atendimento quando disponíveis.
+5. registrar reclamação administrativa relacionada a este caso quando o canal admitir representação por terceiro;
+6. acompanhar prazos e obter documentos de negativa e registros de atendimento vinculados a este caso.
 
 ${subjectLine}
 
-LIMITES: esta autorização não permite movimentação financeira, contratação ou cancelamento de plano, alteração de beneficiários, aceitação de acordo com renúncia de direitos, acesso mediante compartilhamento de senha pessoal, decisão médica, prescrição, alteração de tratamento ou representação judicial.
+LIMITES: esta autorização não permite movimentação financeira, contratação ou cancelamento de plano, alteração de beneficiários, aceite de acordo com renúncia de direitos, compartilhamento ou armazenamento de senha pessoal, decisão médica, prescrição, alteração de tratamento, representação judicial ou qualquer atuação fora deste caso.
 
-Quando um canal exigir credencial pessoal do beneficiário ou forma específica de procuração, a MyDataMed solicitará ao titular a providência adequada, sem armazenar senha pessoal.
+A autorização termina com o encerramento deste caso, sua revogação pelo titular ou o término da finalidade específica, o que ocorrer primeiro.
 
-A judicialização, pedidos de liminar e representação em processo judicial dependem de advogado habilitado e instrumento próprio.
+Quando um canal exigir credencial pessoal do beneficiário ou instrumento com formalidade própria, a equipe solicitará ao titular a providência necessária.
 
-Esta autorização é válida até sua revogação ou encerramento do serviço, sem prejuízo de registros necessários para comprovar atos praticados durante sua vigência.`,
+Ao assinar eletronicamente, o titular declara que leu, compreendeu e autoriza apenas os atos descritos acima para este caso específico.`,
     }
   }
 
@@ -156,10 +157,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const caseId = String(body.caseId || '')
     const documentType = String(body.documentType || 'representation_authorization')
+    const action = String(body.action || 'create')
 
     if (!caseId) return NextResponse.json({ error: 'Caso não informado.' }, { status: 400 })
-    if (!['privacy_consent','representation_authorization','combined_onboarding'].includes(documentType)) {
-      return NextResponse.json({ error: 'Tipo de documento inválido.' }, { status: 400 })
+    if (documentType !== 'representation_authorization') {
+      return NextResponse.json({ error: 'Este fluxo aceita somente autorização específica de representação do caso.' }, { status: 400 })
     }
 
     const { data: caseRow, error: caseError } = await adminClient
@@ -188,6 +190,76 @@ export async function POST(request: NextRequest) {
 
     if (!signerEmail) {
       return NextResponse.json({ error: 'O paciente precisa ter e-mail cadastrado para assinatura verificada por OTP.' }, { status: 400 })
+    }
+
+    if (action === 'sync') {
+      const { data: authorization } = await adminClient
+        .from('concierge_legal_authorizations')
+        .select('*')
+        .eq('patient_id', caseRow.patient_id)
+        .eq('case_id', caseId)
+        .eq('authorization_type', 'representation_authorization')
+        .maybeSingle()
+
+      if (!authorization?.docwallet_signature_request_id) {
+        return NextResponse.json({ error: 'Ainda não há solicitação DocWallet para este caso.' }, { status: 404 })
+      }
+
+      const { baseUrl, key } = docwalletConfig()
+      const statusResponse = await fetch(
+        `${baseUrl}/api/internal/mydatamed/concierge/signatures/${encodeURIComponent(authorization.docwallet_signature_request_id)}`,
+        { headers: { 'X-MyDataMed-Key': key } },
+      )
+      const statusResult = await statusResponse.json().catch(() => ({}))
+
+      if (!statusResponse.ok || statusResult?.success === false) {
+        return NextResponse.json(
+          { error: statusResult?.error || 'Falha ao consultar assinatura no DocWallet.' },
+          { status: statusResponse.status || 502 },
+        )
+      }
+
+      const signatureRequest = statusResult.request || {}
+      const signed = signatureRequest.status === 'completed'
+      const legalStatus = signed ? 'signed' : 'signature_pending'
+
+      const { error: authUpdateError } = await adminClient
+        .from('concierge_legal_authorizations')
+        .update({
+          status: legalStatus,
+          content_hash: signatureRequest.contentHash || authorization.content_hash || null,
+          final_hash: signatureRequest.finalHash || authorization.final_hash || null,
+          signed_at: signed ? (signatureRequest.completedAt || new Date().toISOString()) : null,
+          metadata: {
+            ...(authorization.metadata || {}),
+            provider: 'docwallet',
+            required_evidence: 'verified_evidence',
+            case_scoped: true,
+            last_synced_at: new Date().toISOString(),
+          },
+        })
+        .eq('id', authorization.id)
+
+      if (authUpdateError) throw authUpdateError
+
+      await adminClient
+        .from('concierge_case_documents')
+        .update({
+          status: legalStatus,
+          content_hash: signatureRequest.contentHash || null,
+          final_hash: signatureRequest.finalHash || null,
+          signed_at: signed ? (signatureRequest.completedAt || new Date().toISOString()) : null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('case_id', caseId)
+        .eq('document_type', 'representation_authorization')
+
+      return NextResponse.json({
+        ok: true,
+        signed,
+        status: legalStatus,
+        requestId: authorization.docwallet_signature_request_id,
+      })
     }
 
     let subjectName = signerName
@@ -242,6 +314,65 @@ export async function POST(request: NextRequest) {
     const signatureRequest = result.request || {}
     const party = signatureRequest.parties?.[0] || {}
 
+    const legalAuthorizationRow = {
+      patient_id: caseRow.patient_id,
+      case_id: caseId,
+      authorization_type: 'representation_authorization',
+      status: signatureRequest.status === 'completed' ? 'signed' : 'signature_pending',
+      purpose: `Representação administrativa limitada ao caso: ${caseRow.title}`,
+      recipient: caseRow.insurer_name || null,
+      authorization_scope: {
+        case_id: caseId,
+        case_type: caseRow.case_type,
+        insurer_name: caseRow.insurer_name || null,
+        actions: [
+          'request_information',
+          'follow_protocol',
+          'submit_case_documents',
+          'request_reanalysis',
+          'administrative_complaint_when_allowed',
+        ],
+        excludes: [
+          'financial_transactions',
+          'plan_changes',
+          'rights_waiver',
+          'password_sharing',
+          'medical_decisions',
+          'judicial_representation',
+        ],
+      },
+      docwallet_signature_request_id: signatureRequest.id || null,
+      content_hash: signatureRequest.contentHash || null,
+      final_hash: signatureRequest.finalHash || null,
+      signed_at: signatureRequest.completedAt || null,
+      metadata: {
+        provider: 'docwallet',
+        required_evidence: 'verified_evidence',
+        template_version: 'case_v1',
+        case_scoped: true,
+        source: 'mydatamed_navigation_cockpit',
+      },
+    }
+
+    const { data: existingAuthorization } = await adminClient
+      .from('concierge_legal_authorizations')
+      .select('id')
+      .eq('patient_id', caseRow.patient_id)
+      .eq('case_id', caseId)
+      .eq('authorization_type', 'representation_authorization')
+      .maybeSingle()
+
+    const authorizationResult = existingAuthorization?.id
+      ? await adminClient
+          .from('concierge_legal_authorizations')
+          .update(legalAuthorizationRow)
+          .eq('id', existingAuthorization.id)
+      : await adminClient
+          .from('concierge_legal_authorizations')
+          .insert(legalAuthorizationRow)
+
+    if (authorizationResult.error) throw authorizationResult.error
+
     const legalDocumentRow = {
       case_id: caseId,
       patient_id: caseRow.patient_id,
@@ -279,8 +410,8 @@ export async function POST(request: NextRequest) {
       actor_user_id: user.id,
       actor_role: 'concierge',
       event_type: 'legal_document_created',
-      visibility: 'staff_only',
-      message: `Documento DocWallet gerado: ${template.title}`,
+      visibility: 'patient',
+      message: 'Autorização específica deste caso enviada para assinatura.',
       payload: {
         document_type: documentType,
         signature_request_id: signatureRequest.id || null,

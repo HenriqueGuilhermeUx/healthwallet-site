@@ -1,7 +1,6 @@
 'use client'
 
 import { use, useEffect, useState } from 'react'
-import { supabase } from '@/lib/supabase'
 import {
   BadgeCheck,
   CalendarDays,
@@ -31,15 +30,16 @@ export default function ValidateSignaturePage({ params }: PageProps) {
   async function load() {
     setLoading(true)
 
-    const { data, error } = await supabase
-      .from('signatures')
-      .select('*')
-      .or(`document_hash.eq.${hash},verification_slug.eq.${hash}`)
-      .eq('status', 'valid')
-      .maybeSingle()
+    const response = await fetch('/api/signatures/verify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hash }),
+    })
+    const payload = await response.json().catch(() => ({}))
+    const data = payload?.signature
 
-    if (error || !data) {
-      setError('Assinatura não encontrada ou inválida.')
+    if (!response.ok || !data) {
+      setError(payload?.error || 'Assinatura não encontrada ou inválida.')
       setLoading(false)
       return
     }
@@ -120,8 +120,8 @@ export default function ValidateSignaturePage({ params }: PageProps) {
           </div>
 
           <div className="grid md:grid-cols-2 gap-3 text-sm">
-            <AuditLine icon={Fingerprint} label="CPF registrado" value={`***.***.***-${String(signature.signer_cpf || '').slice(-2) || '**'}`} />
-            <AuditLine icon={Globe} label="IP registrado" value={signature.ip_address || audit.ip_address || 'Registrado'} />
+            <AuditLine icon={Fingerprint} label="CPF registrado" value={`***.***.***-${signature.signer_cpf_last2 || '**'}`} />
+            <AuditLine icon={Globe} label="IP registrado" value={signature.ip_address || 'Registrado'} />
             <AuditLine icon={Globe} label="Navegador" value={shorten(signature.user_agent || audit.user_agent || 'Registrado')} />
             <AuditLine icon={CalendarDays} label="Data/hora" value={formatDateTime(signature.signed_at)} />
           </div>

@@ -1,19 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@supabase/supabase-js'
+import { getSupabaseAdmin, isValidSignToken } from '@/lib/server/supabaseAdmin'
 import { createHash } from 'crypto'
-
-function getSupabaseAdmin() {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-
-  if (!supabaseUrl || !serviceRoleKey) {
-    throw new Error('Supabase env vars missing')
-  }
-
-  return createClient(supabaseUrl, serviceRoleKey, {
-    auth: { persistSession: false },
-  })
-}
 
 function onlyDigits(value: string) {
   return String(value || '').replace(/\D/g, '')
@@ -37,7 +24,7 @@ export async function POST(req: NextRequest) {
     const signerEmail = String(body.signer_email || body.email || '').trim()
     const acceptedTerms = Boolean(body.accepted_terms)
 
-    if (!token || !signerCpf || signerCpf.length < 11 || !acceptedTerms) {
+    if (!isValidSignToken(token) || !signerCpf || signerCpf.length < 11 || !acceptedTerms) {
       return NextResponse.json({ error: 'Dados de assinatura incompletos' }, { status: 400 })
     }
 

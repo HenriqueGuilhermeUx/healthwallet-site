@@ -2,7 +2,6 @@
 
 import { use, useEffect, useState } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
 import {
   BadgeCheck,
   CheckCircle,
@@ -40,41 +39,25 @@ export default function SignDocumentPage({ params }: PageProps) {
     setLoading(true)
     setError('')
 
-    const now = new Date().toISOString()
-    const { data: tokenData, error: tokenError } = await supabase
-      .from('sign_tokens')
-      .select('*')
-      .eq('token', token)
-      .in('status', ['pending', 'viewed'])
-      .gt('expires_at', now)
-      .maybeSingle()
+    const response = await fetch('/api/signatures/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    })
+    const payload = await response.json().catch(() => ({}))
 
-    if (tokenError || !tokenData) {
-      setError('Link inválido, expirado ou já assinado.')
+    if (!response.ok || !payload?.token || !payload?.document) {
+      setError(payload?.error || 'Link inválido, expirado ou já assinado.')
       setLoading(false)
       return
     }
+
+    const tokenData = payload.token
+    const docData = payload.document
 
     setSignToken(tokenData)
     setName(tokenData.patient_name || '')
     setEmail(tokenData.patient_email || '')
-
-    await supabase
-      .from('sign_tokens')
-      .update({ status: 'viewed', viewed_at: new Date().toISOString() })
-      .eq('id', tokenData.id)
-
-    const { data: docData, error: docError } = await supabase
-      .from('professional_clinical_documents')
-      .select('*')
-      .eq('id', tokenData.document_id)
-      .maybeSingle()
-
-    if (docError || !docData) {
-      setError('Documento não encontrado.')
-      setLoading(false)
-      return
-    }
 
     setDocument(docData)
     setLoading(false)

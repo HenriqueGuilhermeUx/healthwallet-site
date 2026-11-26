@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { ReactNode } from 'react'
 import { useProfessionalAccess } from '@/hooks/useProfessionalAccess'
 import { ArrowRight, Gift, Loader2, Lock, ShieldCheck, Sparkles, Wallet } from 'lucide-react'
+import { LOWEST_PAID_PRICE_LABEL, TRIAL_DAYS } from '@/lib/plans'
 
 type ProRouteGuardProps = {
   children: ReactNode
@@ -45,8 +46,8 @@ export default function ProRouteGuard({ children, featureKey, featureName, descr
 
             <div className="grid sm:grid-cols-3 gap-3 mt-6">
               <MiniInfo icon={ShieldCheck} title="Free sempre" text="Acesso aos dados autorizados dos pacientes continua grátis." />
-              <MiniInfo icon={Gift} title="15 dias livres" text="Teste a área comercial sem cobrança inicial." />
-              <MiniInfo icon={Wallet} title="R$ 79,90/mês" text="Ative por Pix Woovi/NextGen quando quiser." />
+              <MiniInfo icon={Gift} title={`${TRIAL_DAYS} dias livres`} text="Teste a área comercial sem cobrança inicial." />
+              <MiniInfo icon={Wallet} title={`A partir de ${LOWEST_PAID_PRICE_LABEL}`} text="Start, Pro ou Clinic, pagos por Pix." />
             </div>
 
             <div className="flex flex-col sm:flex-row gap-3 mt-8">

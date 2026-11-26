@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { ArrowRight, BadgeCheck, Building2, CheckCircle, HeartPulse, Sparkles, Stethoscope, Users, Zap } from 'lucide-react'
+import { PLANS, formatPlanPrice } from '@/lib/plans'
 
 const plans = [
   {
@@ -18,7 +19,7 @@ const plans = [
   {
     code: 'start',
     name: 'Start',
-    price: 'R$ 129/mês',
+    price: formatPlanPrice(PLANS.start),
     visits: '100 atendimentos assistidos/mês',
     description: 'Para começar com consultório digital, página profissional, agenda, IA, cobrança e financeiro básico.',
     icon: Stethoscope,
@@ -29,7 +30,7 @@ const plans = [
   {
     code: 'pro',
     name: 'Pro',
-    price: 'R$ 199/mês',
+    price: formatPlanPrice(PLANS.pro),
     visits: '200 atendimentos assistidos/mês',
     description: 'Para operar melhor, automatizar relacionamento e usar MODO como assistente de produtividade.',
     icon: Zap,
@@ -41,7 +42,7 @@ const plans = [
   {
     code: 'clinic',
     name: 'Clinic',
-    price: 'R$ 399/mês',
+    price: formatPlanPrice(PLANS.clinic),
     visits: '400 atendimentos assistidos/mês',
     description: 'Para clínicas e equipes com recepção digital, fila, múltiplos profissionais e operação gerencial.',
     icon: Building2,

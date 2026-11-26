@@ -3,6 +3,7 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react'
 import { User, Session } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
+import { PLANS } from '@/lib/plans'
 
 interface Professional {
   id: string
@@ -64,12 +65,9 @@ interface SignUpData {
 const defaultAllowedCapabilities = ['basic_workspace', 'ai_copilot', 'patient_records', 'care_plan', 'follow_up', 'crm']
 const defaultBlockedCapabilities = ['prescription', 'official_signature', 'controlled_prescription', 'official_medical_document']
 
-const planDefaults: Record<string, { visits: number; modo: number }> = {
-  free: { visits: 0, modo: 0 },
-  start: { visits: 100, modo: 0 },
-  pro: { visits: 200, modo: 500 },
-  clinic: { visits: 400, modo: 1200 },
-}
+const planDefaults: Record<string, { visits: number; modo: number }> = Object.fromEntries(
+  Object.values(PLANS).map((plan) => [plan.code, { visits: plan.visits, modo: plan.modoCredits }]),
+)
 
 function onlyDigits(value?: string) {
   return String(value || '').replace(/\D/g, '')

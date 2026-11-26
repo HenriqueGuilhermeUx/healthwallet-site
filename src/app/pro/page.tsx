@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
+import { PAID_PLAN_CODES, PLANS, TRIAL_DAYS, formatPlanPrice, isPaidPlanCode, type PaidPlanCode, LOWEST_PAID_PRICE_LABEL } from '@/lib/plans'
 import {
   Bot,
   CalendarDays,
@@ -30,6 +31,7 @@ export default function ProPage() {
   const [features, setFeatures] = useState<any[]>([])
   const [charges, setCharges] = useState<any[]>([])
   const [pix, setPix] = useState<any>(null)
+  const [selectedPlan, setSelectedPlan] = useState<PaidPlanCode>('start')
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/login')
@@ -72,6 +74,13 @@ export default function ProPage() {
         .limit(5),
     ])
 
+    const { data: commercial } = await supabase
+      .from('professional_commercial_subscriptions')
+      .select('plan_code')
+      .eq('professional_user_id', user.id)
+      .maybeSingle()
+    if (isPaidPlanCode(commercial?.plan_code)) setSelectedPlan(commercial.plan_code)
+
     setSubscription(sub || null)
     setFeatures(feat || [])
     setCharges(chargeRows || [])
@@ -95,7 +104,7 @@ export default function ProPage() {
       return
     }
 
-    toast.success('Trial Pro ativado por 15 dias')
+    toast.success(`Teste ativado por ${TRIAL_DAYS} dias`)
     await load()
     setStartingTrial(false)
   }
@@ -107,7 +116,8 @@ export default function ProPage() {
 
     const response = await fetch('/api/billing/woovi/create-pro-charge', {
       method: 'POST',
-      headers: { Authorization: `Bearer ${session.access_token}` },
+      headers: { Authorization: `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ plan_code: selectedPlan }),
     })
 
     const payload = await response.json()
@@ -119,7 +129,7 @@ export default function ProPage() {
     }
 
     setPix(payload)
-    toast.success('Pix Pro gerado')
+    toast.success(`Pix do plano ${PLANS[selectedPlan].name} gerado`)
     await load()
     setCreatingPix(false)
   }
@@ -171,8 +181,8 @@ export default function ProPage() {
 
       <section className="grid md:grid-cols-3 gap-4">
         <FeatureCard icon={Shield} title="Free sempre" text="Acesso gratuito aos dados autorizados por pacientes mediante cadastro profissional." active />
-        <FeatureCard icon={Gift} title="15 dias livres" text="Teste teleconsulta, CRM, pagamentos e documentos sem cobrança inicial." active={planStatus === 'trial' || planStatus === 'active'} />
-        <FeatureCard icon={CreditCard} title="R$ 79,90/mês" text="Pix Woovi para ativar/renovar o modo profissional Pro." active={planStatus === 'active'} />
+        <FeatureCard icon={Gift} title={`${TRIAL_DAYS} dias livres`} text="Teste teleconsulta, CRM, pagamentos e documentos sem cobrança inicial." active={planStatus === 'trial' || planStatus === 'active'} />
+        <FeatureCard icon={CreditCard} title={`A partir de ${LOWEST_PAID_PRICE_LABEL}`} text="Start, Pro ou Clinic, pagos por Pix. O pagamento ativa o plano por 30 dias." active={planStatus === 'active'} />
       </section>
 
       <section className="grid lg:grid-cols-[1fr_0.9fr] gap-6">
@@ -182,6 +192,21 @@ export default function ProPage() {
             O acesso aos dados autorizados continua grátis. O Pro libera a área comercial: teleconsultas, CRM/Bots, pagamentos e documentos.
           </p>
 
+          <div className="grid sm:grid-cols-3 gap-3">
+            {PAID_PLAN_CODES.map((code) => (
+              <button
+                key={code}
+                type="button"
+                onClick={() => setSelectedPlan(code)}
+                className={`rounded-2xl border p-4 text-left transition-all ${selectedPlan === code ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-500/10' : 'border-gray-100 bg-gray-50 hover:bg-white'}`}
+              >
+                <p className="font-bold text-gray-900">{PLANS[code].name}</p>
+                <p className="text-xl font-bold text-emerald-700 mt-1">{formatPlanPrice(PLANS[code])}</p>
+                <p className="text-xs text-gray-500 mt-1">{PLANS[code].visits} atendimentos/mês</p>
+              </button>
+            ))}
+          </div>
+
           <div className="grid md:grid-cols-2 gap-3">
             <button
               onClick={startTrial}
@@ -189,7 +214,7 @@ export default function ProPage() {
               className="rounded-2xl bg-emerald-600 text-white p-5 text-left disabled:opacity-50"
             >
               <Gift className="w-7 h-7 mb-3" />
-              <p className="font-bold">Ativar 15 dias grátis</p>
+              <p className="font-bold">Ativar {TRIAL_DAYS} dias grátis</p>
               <p className="text-sm text-white/75 mt-1">Sem Pix agora. Libera os recursos comerciais em trial.</p>
             </button>
 
@@ -199,8 +224,8 @@ export default function ProPage() {
               className="rounded-2xl bg-slate-950 text-white p-5 text-left disabled:opacity-50"
             >
               {creatingPix ? <Loader2 className="w-7 h-7 mb-3 animate-spin" /> : <Wallet className="w-7 h-7 mb-3" />}
-              <p className="font-bold">Gerar Pix R$ 79,90</p>
-              <p className="text-sm text-white/75 mt-1">Pagamento via Woovi. Webhook ativa o Pro por 30 dias.</p>
+              <p className="font-bold">Gerar Pix {formatPlanPrice(PLANS[selectedPlan], false)} ({PLANS[selectedPlan].name})</p>
+              <p className="text-sm text-white/75 mt-1">Pagamento via Pix. A confirmação ativa o plano por 30 dias.</p>
             </button>
           </div>
 

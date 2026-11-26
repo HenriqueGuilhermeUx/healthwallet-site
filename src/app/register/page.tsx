@@ -6,6 +6,7 @@ import Link from 'next/link'
 import { useAuth } from '@/contexts/AuthContext'
 import { toast } from 'sonner'
 import { BriefcaseBusiness, Building2, CheckCircle, CreditCard, FileText, Heart, Link as LinkIcon, Loader2, Lock, Mail, MapPin, Phone, ShieldCheck, Sparkles, Stethoscope, User, WalletCards } from 'lucide-react'
+import { PAID_PLAN_CODES, PLANS as PLANS_TABLE, formatPlanPrice } from '@/lib/plans'
 
 const PROFESSIONAL_TYPES = [
   { value: 'medico', label: 'Médico(a)' },
@@ -46,11 +47,13 @@ const STATES = [
   'RS', 'RO', 'RR', 'SC', 'SP', 'SE', 'TO'
 ]
 
-const PLANS = [
-  { code: 'start', name: 'Start', price: 'R$ 129/mês', visits: '100 atendimentos', description: 'Para começar com consultório digital, agenda, página, IA, CRM e backoffice.' },
-  { code: 'pro', name: 'Pro', price: 'R$ 199/mês', visits: '200 atendimentos', description: 'Para operar e crescer com MODO, CRM avançado, automações e assistente.' },
-  { code: 'clinic', name: 'Clinic', price: 'R$ 399/mês', visits: '400 atendimentos', description: 'Para clínicas/equipes com recepção digital, múltiplos profissionais e gestão.' },
-]
+const PLANS = PAID_PLAN_CODES.map((code) => ({
+  code,
+  name: PLANS_TABLE[code].name,
+  price: formatPlanPrice(PLANS_TABLE[code]),
+  visits: `${PLANS_TABLE[code].visits} atendimentos`,
+  description: PLANS_TABLE[code].description,
+}))
 
 function inferTemplate(professionalType: string) {
   const map: Record<string, string> = {

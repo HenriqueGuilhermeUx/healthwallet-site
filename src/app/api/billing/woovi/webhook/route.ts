@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { PLANS, isPaidPlanCode } from '@/lib/plans'
 
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -35,6 +36,31 @@ function isPaidEvent(status?: string | null, eventType?: string | null) {
 function isExpiredEvent(status?: string | null, eventType?: string | null) {
   const value = `${status || ''} ${eventType || ''}`.toLowerCase()
   return value.includes('expired') || value.includes('cancelled') || value.includes('canceled')
+}
+
+// Marca o plano comercial (Start/Pro/Clinic) como ativo pelo ciclo pago, com a
+// franquia de atendimentos e créditos MODO da tabela única de planos.
+async function activateCommercialPlanFromCharge(supabase: any, charge: any) {
+  const planCode = charge?.metadata?.plan_code
+  if (!isPaidPlanCode(planCode) || !charge?.professional_user_id) return
+  const plan = PLANS[planCode]
+  const cycleStart = new Date()
+  const cycleEnd = new Date(cycleStart)
+  cycleEnd.setMonth(cycleEnd.getMonth() + 1)
+
+  await supabase.from('professional_commercial_subscriptions').upsert({
+    professional_id: charge.professional_id || null,
+    professional_user_id: charge.professional_user_id,
+    plan_code: planCode,
+    status: 'active',
+    billing_cycle_start: cycleStart.toISOString().slice(0, 10),
+    billing_cycle_end: cycleEnd.toISOString().slice(0, 10),
+    included_assisted_visits: plan.visits,
+    used_assisted_visits: 0,
+    included_modo_credits: plan.modoCredits,
+    used_modo_credits: 0,
+    metadata: { activated_by_charge_id: charge.id, activated_at: cycleStart.toISOString() },
+  }, { onConflict: 'professional_user_id' })
 }
 
 function isSubscriptionCharge(charge: any) {
@@ -165,6 +191,7 @@ export async function POST(req: NextRequest) {
             p_professional_id: charge.professional_id || null,
             p_charge_id: charge.id,
           })
+          await activateCommercialPlanFromCharge(supabase, charge)
         }
 
         processed = true

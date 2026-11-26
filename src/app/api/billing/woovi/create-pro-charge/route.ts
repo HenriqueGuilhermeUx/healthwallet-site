@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { randomUUID } from 'crypto'
+import { PLANS, formatPlanPrice, isPaidPlanCode, type PaidPlanCode } from '@/lib/plans'
 
-const PRO_PRICE_CENTS = 7990
 
 function getSupabaseAdmin() {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
@@ -78,10 +78,26 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Cadastro profissional não encontrado' }, { status: 404 })
     }
 
+    const body = await req.json().catch(() => ({}))
+    let planCode: PaidPlanCode = 'start'
+    if (isPaidPlanCode(body?.plan_code)) {
+      planCode = body.plan_code
+    } else {
+      const { data: commercial } = await supabase
+        .from('professional_commercial_subscriptions')
+        .select('plan_code')
+        .eq('professional_user_id', user.id)
+        .maybeSingle()
+      if (isPaidPlanCode(commercial?.plan_code)) planCode = commercial.plan_code
+    }
+    const plan = PLANS[planCode]
+    const priceCents = plan.priceCents
+    const planLabel = `MyDataMed ${plan.name}`
+
     const { apiKey, baseUrl } = getWooviConfig()
     const now = new Date()
     const dueAt = new Date(now.getTime() + 24 * 60 * 60 * 1000)
-    const correlationId = `mydatamed-pro-${professional.id}-${randomUUID()}`
+    const correlationId = `mydatamed-${planCode}-${professional.id}-${randomUUID()}`
 
     const { data: subscription } = await supabase
       .from('professional_subscriptions')
@@ -100,8 +116,8 @@ export async function POST(req: NextRequest) {
         patient_id: null,
         patient_email: user.email,
         charge_type: 'subscription',
-        amount_cents: PRO_PRICE_CENTS,
-        platform_fee_cents: PRO_PRICE_CENTS,
+        amount_cents: priceCents,
+        platform_fee_cents: priceCents,
         professional_net_cents: 0,
         currency: 'BRL',
         status: 'draft',
@@ -110,7 +126,8 @@ export async function POST(req: NextRequest) {
         due_at: dueAt.toISOString(),
         metadata: {
           product: 'mydatamed-pro',
-          plan: 'MyDataMed Pro',
+          plan: planLabel,
+          plan_code: planCode,
           professional_id: professional.id,
           professional_name: professional.full_name,
           professional_email: user.email,
@@ -125,8 +142,8 @@ export async function POST(req: NextRequest) {
 
     const wooviPayload = {
       correlationID: correlationId,
-      value: PRO_PRICE_CENTS,
-      comment: 'MyDataMed Pro - assinatura mensal',
+      value: priceCents,
+      comment: `${planLabel} - assinatura mensal`,
       expiresIn: 86400,
       customer: {
         name: professional.full_name,
@@ -134,9 +151,9 @@ export async function POST(req: NextRequest) {
         taxID: onlyDigits(professional.cpf),
       },
       additionalInfo: [
-        { key: 'Produto', value: 'MyDataMed Pro' },
+        { key: 'Produto', value: planLabel },
         { key: 'Profissional', value: professional.full_name },
-        { key: 'Plano', value: 'R$ 79,90/mês' },
+        { key: 'Plano', value: `${plan.name} - ${formatPlanPrice(plan)}` },
       ],
     }
 

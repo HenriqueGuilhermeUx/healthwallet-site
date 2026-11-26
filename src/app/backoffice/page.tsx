@@ -7,13 +7,11 @@ import { useAuth } from '@/contexts/AuthContext'
 import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import { ArrowRight, Banknote, CalendarDays, CheckCircle, CreditCard, Loader2, PackagePlus, Plus, Receipt, RefreshCw, Save, WalletCards } from 'lucide-react'
+import { PLANS, formatPlanPrice } from '@/lib/plans'
 
-const planMeta: Record<string, any> = {
-  free: { label: 'Free Dados', price: 'R$ 0', visits: 0 },
-  start: { label: 'Start', price: 'R$ 129', visits: 100 },
-  pro: { label: 'Pro', price: 'R$ 199', visits: 200 },
-  clinic: { label: 'Clinic', price: 'R$ 399', visits: 400 },
-}
+const planMeta: Record<string, any> = Object.fromEntries(
+  Object.values(PLANS).map((plan) => [plan.code, { label: plan.name, price: formatPlanPrice(plan, false), visits: plan.visits, modo: plan.modoCredits }]),
+)
 
 const emptyService = { name: '', description: '', service_type: 'consultation', duration_minutes: 50, price_cents: 0, sessions_included: 1, is_public: true }
 const emptyEntry = { entry_type: 'receivable', description: '', category: '', amount_cents: 0, due_date: '', patient_name: '', patient_email: '', patient_phone: '', payment_method: 'not_defined' }
@@ -77,7 +75,7 @@ export default function BackofficePage() {
       status: 'trial',
       included_assisted_visits: meta.visits,
       used_assisted_visits: 0,
-      included_modo_credits: planCode === 'pro' ? 500 : planCode === 'clinic' ? 1200 : 0,
+      included_modo_credits: meta.modo,
       used_modo_credits: 0,
       metadata: { created_from: 'backoffice_bootstrap' },
     }, { onConflict: 'professional_user_id' })

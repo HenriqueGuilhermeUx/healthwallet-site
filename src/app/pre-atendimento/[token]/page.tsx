@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { supabase } from '@/lib/supabase'
 import { toast } from 'sonner'
 import {
   AlertTriangle,
@@ -65,13 +64,15 @@ export default function PublicPreAtendimentoPage() {
 
   async function loadLink(publicToken: string) {
     setLoading(true)
-    const { data, error } = await supabase
-      .from('patient_precheck_links')
-      .select('id, professional_user_id, public_token, title, clinic_name, specialty, default_reason, landing_message, status, expires_at, max_submissions, submission_count, require_cpf, require_health_plan, allow_plan_data, allow_companion_data')
-      .eq('public_token', publicToken)
-      .maybeSingle()
+    const response = await fetch('/api/precheck/link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token: publicToken }),
+    }).catch(() => null)
+    const payload = response ? await response.json().catch(() => ({})) : {}
+    const data = payload?.link
 
-    if (error || !data) {
+    if (!response?.ok || !data) {
       setLink(null)
       setLoading(false)
       return
@@ -79,16 +80,6 @@ export default function PublicPreAtendimentoPage() {
 
     setLink(data)
     setForm((current: any) => ({ ...current, reason: current.reason || data.default_reason || '' }))
-
-    try {
-      await supabase.from('patient_precheck_events').insert({
-        link_id: data.id,
-        professional_user_id: data.professional_user_id,
-        event_type: 'public_form_opened',
-        description: 'Formulário público de autoatendimento aberto.',
-        metadata: { public_token: publicToken, user_agent: navigator.userAgent },
-      })
-    } catch {}
 
     setLoading(false)
   }

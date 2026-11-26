@@ -10,6 +10,7 @@ import {
   CalendarCheck,
   CalendarDays,
   ClipboardCheck,
+  ClipboardList,
   CreditCard,
   FileSearch,
   FileText,
@@ -19,6 +20,7 @@ import {
   Image,
   LogOut,
   MonitorSmartphone,
+  MoreHorizontal,
   ShieldCheck,
   SlidersHorizontal,
   Sparkles,
@@ -89,29 +91,32 @@ export function Header() {
         </Link>
 
         {user && (professional || teamRole) && (
-          <div className="flex items-center gap-1 md:gap-2 overflow-x-auto">
+          <div className="flex items-center gap-1 md:gap-2">
             {professional && (
               <>
-                <NavLink href="/consultorio" icon={BriefcaseBusiness} label="Consultório" tone="emerald" />
+                <NavLink href="/pre-atendimento" icon={ClipboardList} label="Pré-consulta" tone="emerald" />
                 <NavLink href="/agenda" icon={CalendarDays} label="Agenda" tone="emerald" />
-                <NavLink href="/minha-pagina" icon={Globe2} label="Página" tone="emerald" />
-                <NavLink href="/midia" icon={Image} label="Mídia" tone="emerald" />
-                <NavLink href="/backoffice" icon={WalletCards} label="Backoffice" tone="blue" />
-                <NavLink href="/cobrancas" icon={CreditCard} label="Cobranças" tone="blue" />
-                <NavLink href="/modo" icon={Sparkles} label="MODO" tone="violet" />
-                <NavLink href="/recepcao-autoatendimento" icon={MonitorSmartphone} label="Recepção" tone="emerald" />
-                <NavLink href="/entrada-paciente" icon={ClipboardCheck} label="Entrada" tone="blue" />
-                <NavLink href="/dados-dispositivos" icon={Watch} label="Dispositivos" tone="sky" />
                 <NavLink href="/consulta-assistida" icon={Brain} label="Atendimento IA" tone="violet" />
                 <NavLink href="/prontuario" icon={FileText} label="Prontuário" tone="blue" />
-                <NavLink href="/meu-jeito-atender" icon={SlidersHorizontal} label="Meu jeito" tone="violet" />
-                <NavLink href="/lgpd-consultorio" icon={ShieldCheck} label="LGPD" tone="blue" />
-                {canShowRegulated && (
-                  <>
-                    <NavLink href="/prescriptions" icon={FileText} label="Receitas" tone="emerald" />
-                    <NavLink href="/exam-requests" icon={FileSearch} label="Pedidos" tone="sky" />
-                  </>
-                )}
+                <NavLink href="/cobrancas" icon={CreditCard} label="Cobranças" tone="blue" />
+                <MoreMenu>
+                  <MenuLink href="/consultorio" icon={BriefcaseBusiness} label="Consultório" />
+                  <MenuLink href="/minha-pagina" icon={Globe2} label="Minha página" />
+                  <MenuLink href="/midia" icon={Image} label="Mídia" />
+                  <MenuLink href="/backoffice" icon={WalletCards} label="Backoffice" />
+                  <MenuLink href="/modo" icon={Sparkles} label="MODO" />
+                  <MenuLink href="/recepcao-autoatendimento" icon={MonitorSmartphone} label="Recepção" />
+                  <MenuLink href="/entrada-paciente" icon={ClipboardCheck} label="Entrada de paciente" />
+                  <MenuLink href="/dados-dispositivos" icon={Watch} label="Dispositivos" />
+                  <MenuLink href="/meu-jeito-atender" icon={SlidersHorizontal} label="Meu jeito de atender" />
+                  <MenuLink href="/lgpd-consultorio" icon={ShieldCheck} label="LGPD" />
+                  {canShowRegulated && (
+                    <>
+                      <MenuLink href="/prescriptions" icon={FileText} label="Receitas" />
+                      <MenuLink href="/exam-requests" icon={FileSearch} label="Pedidos de exame" />
+                    </>
+                  )}
+                </MoreMenu>
               </>
             )}
 
@@ -163,6 +168,31 @@ function NavLink({ href, icon: Icon, label, tone }: any) {
     >
       <Icon className="w-4 h-4" />
       <span className="hidden sm:inline">{label}</span>
+    </Link>
+  )
+}
+
+// Itens secundários ficam num menu "Mais" para a barra mostrar só o fluxo
+// principal: pré-consulta, agenda, atendimento, prontuário e cobrança.
+function MoreMenu({ children }: { children: ReactNode }) {
+  return (
+    <details className="relative flex-shrink-0 group">
+      <summary className="list-none cursor-pointer flex items-center gap-1.5 px-3 py-2 text-sm text-gray-700 rounded-lg hover:bg-gray-50 [&::-webkit-details-marker]:hidden">
+        <MoreHorizontal className="w-4 h-4" />
+        <span className="hidden sm:inline">Mais</span>
+      </summary>
+      <div className="absolute right-0 mt-2 w-60 rounded-2xl border bg-white p-2 shadow-lg z-50 grid gap-0.5">
+        {children}
+      </div>
+    </details>
+  )
+}
+
+function MenuLink({ href, icon: Icon, label }: any) {
+  return (
+    <Link href={href} className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm text-gray-700 hover:bg-emerald-50 hover:text-emerald-700">
+      <Icon className="w-4 h-4" />
+      <span>{label}</span>
     </Link>
   )
 }
